@@ -137,6 +137,8 @@ const AGENTS_META = [
   { id: "research",   label: "RESEARCH",   icon: "◎", color: N.yellow, num: "03" },
   { id: "scheduler",  label: "SCHEDULER",  icon: "◷", color: N.purple, num: "04" },
   { id: "revenue",    label: "REVENUE",    icon: "◆", color: N.red,    num: "05" },
+  { id: "etsy",       label: "ETSY",       icon: "🛍", color: "#ff6b35", num: "06" },
+  { id: "fiverr",     label: "FIVERR",     icon: "💼", color: "#1dbf73", num: "07" },
 ];
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -875,12 +877,12 @@ export default function AgentEmpire() {
                 flex: 1, padding: "6px 10px", cursor: "pointer", textAlign: "center",
                 background: active === a.id ? `${a.color}15` : N.panel,
                 border: `1px solid ${active === a.id ? a.color : N.border}`,
-                borderRight: i < 4 ? "none" : undefined,
+                borderRight: i < AGENTS_META.length - 1 ? "none" : undefined,
                 transition: "all 0.15s",
               }}>
                 <div style={{ fontSize: 9, color: active === a.id ? a.color : N.textDim, letterSpacing: 2 }}>{a.icon} {a.label}</div>
               </div>
-              {i < 4 && <div style={{ fontSize: 10, color: N.border, padding: "0 4px" }}>→</div>}
+              {i < AGENTS_META.length - 1 && <div style={{ fontSize: 10, color: N.border, padding: "0 4px" }}>→</div>}
             </div>
           ))}
           <div style={{ fontSize: 10, color: N.border, padding: "0 6px" }}>→</div>
@@ -912,6 +914,8 @@ export default function AgentEmpire() {
             {active === "research"   && <ResearchAgent config={config} log={pushLog} />}
             {active === "scheduler"  && <SchedulerAgent config={config} log={pushLog} />}
             {active === "revenue"    && <RevenueAgent config={config} log={pushLog} />}
+            {active === "etsy"       && <EtsyAgent config={config} log={pushLog} />}
+            {active === "fiverr"     && <FiverrAgent config={config} log={pushLog} />}
           </div>
 
           {/* Activity log sidebar */}
@@ -924,12 +928,251 @@ export default function AgentEmpire() {
 
         {/* Footer */}
         <div style={{ textAlign: "center", marginTop: 24, fontSize: 9, color: N.textDim, letterSpacing: 3 }}>
-          AGENT EMPIRE v3.0 · 5 AGENTS ONLINE · RUNNING 24/7 ON RAILWAY
+          AGENT EMPIRE v3.0 · 7 AGENTS ONLINE · RUNNING 24/7 ON RAILWAY
         </div>
       </div>
 
       {/* Config drawer */}
       <ConfigDrawer open={configOpen} onClose={() => setConfigOpen(false)} config={config} setConfig={setConfig} activeAgent={active} />
+    </div>
+  );
+}
+
+// ─── AGENT 6: ETSY ───────────────────────────────────────────────────────────
+function EtsyAgent({ config, log }) {
+  const ETSY_PRODUCTS = [
+    { id: "prompts", label: "AI PROMPT PACK" },
+    { id: "templates", label: "CONTENT TEMPLATES" },
+    { id: "calendar", label: "CONTENT CALENDAR" },
+    { id: "guide", label: "MONETIZATION GUIDE" },
+    { id: "scripts", label: "VIDEO SCRIPT PACK" },
+    { id: "bundle", label: "FULL BUNDLE" },
+  ];
+  const PRICE_RANGES = [
+    { id: "budget", label: "$5 - $15" },
+    { id: "mid", label: "$15 - $35" },
+    { id: "premium", label: "$35 - $75" },
+    { id: "high", label: "$75+" },
+  ];
+
+  const [productType, setProductType] = useState("prompts");
+  const [priceRange, setPriceRange] = useState("mid");
+  const [niche, setNiche] = useState(config.niche || "AI & Make Money Online");
+  const [loading, setLoading] = useState(false);
+  const [out, setOut] = useState("");
+
+  const generate = async () => {
+    setLoading(true); setOut("");
+    log("etsy", `Generating Etsy listing for ${productType} in ${niche}...`);
+    const priceMap = { budget: "$5-$15", mid: "$15-$35", premium: "$35-$75", high: "$75-$150" };
+    const productMap = {
+      prompts: "AI prompt pack (50-100 prompts)",
+      templates: "social media content templates pack",
+      calendar: "30-day content calendar with daily post ideas",
+      guide: "step-by-step monetization guide PDF",
+      scripts: "viral video script pack (20 scripts)",
+      bundle: "complete digital bundle with prompts, templates, calendar and guide",
+    };
+    const prompt = `You are an Etsy SEO and digital product expert. Create a complete Etsy listing for a ${productMap[productType]} in the "${niche}" niche priced at ${priceMap[priceRange]}.
+
+Generate EXACTLY in this format:
+
+TITLE: [SEO-optimized title, max 140 chars, include keywords buyers search for]
+
+PRICE: [Specific price in range with reasoning]
+
+DESCRIPTION:
+[5-paragraph description: hook, what's included, who it's for, what results they get, call to action. Use line breaks. 300-400 words.]
+
+TAGS: [13 comma-separated Etsy tags, single words or short phrases, high search volume]
+
+WHAT TO INCLUDE IN THE DIGITAL FILE:
+[Bullet list of exactly what content to create and put in the downloadable file]
+
+UPSELL IDEAS:
+[3 related products to create next for this shop]`;
+
+    const result = await callClaude(prompt).catch(() => "ERROR. Try again.");
+    setOut(result);
+    log("etsy", `Etsy listing generated — ready to publish`);
+    setLoading(false);
+  };
+
+  return (
+    <div>
+      <AgentStatusBar agentId="etsy" loading={loading} statusText="GENERATING ETSY PRODUCT LISTING..." />
+      <Panel color="#ff6b35" style={{ padding: 14, marginBottom: 10 }}>
+        <SectionLabel color="#ff6b35">PRODUCT TYPE</SectionLabel>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {ETSY_PRODUCTS.map(p => (
+            <button key={p.id} onClick={() => setProductType(p.id)} style={{
+              padding: "6px 12px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono,
+              fontSize: 10, letterSpacing: 1.5, fontWeight: 700,
+              border: productType === p.id ? "1px solid #ff6b35" : `1px solid ${N.border}`,
+              background: productType === p.id ? "#ff6b3518" : "transparent",
+              color: productType === p.id ? "#ff6b35" : N.textDim,
+              boxShadow: productType === p.id ? "0 0 6px #ff6b3544" : "none",
+            }}>{p.label}</button>
+          ))}
+        </div>
+      </Panel>
+      <Panel color="#ff6b35" style={{ padding: 14, marginBottom: 10 }}>
+        <SectionLabel color="#ff6b35">PRICE RANGE</SectionLabel>
+        <div style={{ display: "flex", gap: 6 }}>
+          {PRICE_RANGES.map(p => (
+            <button key={p.id} onClick={() => setPriceRange(p.id)} style={{
+              flex: 1, padding: "8px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono,
+              fontSize: 10, letterSpacing: 1, border: priceRange === p.id ? "1px solid #ff6b35" : `1px solid ${N.border}`,
+              background: priceRange === p.id ? "#ff6b3518" : "transparent",
+              color: priceRange === p.id ? "#ff6b35" : N.textDim,
+            }}>{p.label}</button>
+          ))}
+        </div>
+      </Panel>
+      <Panel color="#ff6b35" style={{ padding: 14, marginBottom: 14 }}>
+        <SectionLabel color="#ff6b35">NICHE</SectionLabel>
+        <CyberInput value={niche} onChange={setNiche} placeholder="> ENTER NICHE..." />
+      </Panel>
+      <CyberBtn onClick={generate} disabled={loading} color="#ff6b35">
+        {loading ? "🛍 AGENT RUNNING..." : "🛍 GENERATE ETSY LISTING"}
+      </CyberBtn>
+      <OutputBox text={out} label="ETSY LISTING OUTPUT" color="#ff6b35" />
+      {out && (
+        <Panel color="#ff6b35" style={{ padding: 14, marginTop: 10 }}>
+          <div style={{ fontSize: 9, color: "#ff6b35", letterSpacing: 2, marginBottom: 8 }}>◈ NEXT STEPS</div>
+          <div style={{ fontSize: 11, color: N.textDim, lineHeight: 1.8 }}>
+            1. Copy the title, description and tags above<br />
+            2. Go to <span style={{ color: "#ff6b35" }}>etsy.com/sell</span> → Add Listing<br />
+            3. Create the digital file (PDF/Notion/Google Doc)<br />
+            4. Upload and publish — your shop goes live in minutes<br />
+            5. Wait for Etsy bank verification (3-5 days) to receive payments
+          </div>
+        </Panel>
+      )}
+    </div>
+  );
+}
+
+// ─── AGENT 7: FIVERR ─────────────────────────────────────────────────────────
+function FiverrAgent({ config, log }) {
+  const GIG_TYPES = [
+    { id: "content", label: "CONTENT CREATION" },
+    { id: "scripts", label: "VIDEO SCRIPTS" },
+    { id: "strategy", label: "CONTENT STRATEGY" },
+    { id: "ugc", label: "UGC CONTENT" },
+    { id: "ghostwrite", label: "GHOSTWRITING" },
+    { id: "audit", label: "SOCIAL MEDIA AUDIT" },
+  ];
+  const OUTPUT_TYPES = [
+    { id: "gig", label: "NEW GIG" },
+    { id: "message", label: "BUYER MESSAGE" },
+    { id: "faq", label: "GIG FAQs" },
+    { id: "upsell", label: "UPSELL SCRIPT" },
+  ];
+
+  const [gigType, setGigType] = useState("content");
+  const [outputType, setOutputType] = useState("gig");
+  const [niche, setNiche] = useState(config.niche || "AI & Make Money Online");
+  const [loading, setLoading] = useState(false);
+  const [out, setOut] = useState("");
+
+  const generate = async () => {
+    setLoading(true); setOut("");
+    log("fiverr", `Generating Fiverr ${outputType} for ${gigType} gig...`);
+
+    const gigMap = {
+      content: "AI-powered social media content creation (hooks, captions, scripts)",
+      scripts: "viral video scripts for TikTok, YouTube Shorts and Instagram Reels",
+      strategy: "complete content strategy and posting schedule for creators",
+      ugc: "UGC-style content scripts and briefs for brands",
+      ghostwrite: "ghostwriting for creators — posts, captions, newsletters",
+      audit: "social media account audit with growth recommendations",
+    };
+
+    const prompts = {
+      gig: `Create a complete Fiverr gig for "${gigMap[gigType]}" in the "${niche}" niche.
+
+Format EXACTLY:
+
+GIG TITLE: [max 80 chars, include high-search keywords]
+
+CATEGORY: [Fiverr category path]
+
+SEARCH TAGS: [5 comma-separated tags]
+
+DESCRIPTION: [400-500 word description. Start with a hook. Include: what you offer, your process, what they receive, why you're the best choice, CTA. Use line breaks and bullet points.]
+
+PACKAGES:
+BASIC ($25) — [what's included, 2-day delivery]
+STANDARD ($50) — [what's included, 1-day delivery]
+PREMIUM ($100) — [what's included, same-day delivery]
+
+REQUIREMENTS FROM BUYER: [3-5 things to ask buyer when they order]`,
+
+      message: `Write a professional Fiverr welcome message to send buyers who order the "${gigMap[gigType]}" gig. It should: thank them, explain what you need from them, set expectations on delivery, and feel warm but professional. Max 150 words.`,
+
+      faq: `Write 6 FAQ questions and answers for a Fiverr gig offering "${gigMap[gigType]}". Make the answers reassuring, specific, and convert skeptical buyers. Format as Q: / A: pairs.`,
+
+      upsell: `Write a Fiverr upsell message to send to buyers after delivering "${gigMap[gigType]}". Offer them a related service upgrade. Make it feel natural, not pushy. Include a specific offer with price. Max 100 words.`,
+    };
+
+    const result = await callClaude(prompts[outputType]).catch(() => "ERROR. Try again.");
+    setOut(result);
+    log("fiverr", `Fiverr ${outputType} generated — ready to use`);
+    setLoading(false);
+  };
+
+  return (
+    <div>
+      <AgentStatusBar agentId="fiverr" loading={loading} statusText="GENERATING FIVERR GIG CONTENT..." />
+      <Panel color="#1dbf73" style={{ padding: 14, marginBottom: 10 }}>
+        <SectionLabel color="#1dbf73">GIG SERVICE TYPE</SectionLabel>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {GIG_TYPES.map(g => (
+            <button key={g.id} onClick={() => setGigType(g.id)} style={{
+              padding: "6px 12px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono,
+              fontSize: 10, letterSpacing: 1.5, fontWeight: 700,
+              border: gigType === g.id ? "1px solid #1dbf73" : `1px solid ${N.border}`,
+              background: gigType === g.id ? "#1dbf7318" : "transparent",
+              color: gigType === g.id ? "#1dbf73" : N.textDim,
+              boxShadow: gigType === g.id ? "0 0 6px #1dbf7344" : "none",
+            }}>{g.label}</button>
+          ))}
+        </div>
+      </Panel>
+      <Panel color="#1dbf73" style={{ padding: 14, marginBottom: 10 }}>
+        <SectionLabel color="#1dbf73">GENERATE</SectionLabel>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {OUTPUT_TYPES.map(o => (
+            <button key={o.id} onClick={() => setOutputType(o.id)} style={{
+              flex: 1, padding: "8px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono,
+              fontSize: 10, letterSpacing: 1, border: outputType === o.id ? "1px solid #1dbf73" : `1px solid ${N.border}`,
+              background: outputType === o.id ? "#1dbf7318" : "transparent",
+              color: outputType === o.id ? "#1dbf73" : N.textDim,
+            }}>{o.label}</button>
+          ))}
+        </div>
+      </Panel>
+      <Panel color="#1dbf73" style={{ padding: 14, marginBottom: 14 }}>
+        <SectionLabel color="#1dbf73">NICHE</SectionLabel>
+        <CyberInput value={niche} onChange={setNiche} placeholder="> ENTER NICHE..." />
+      </Panel>
+      <CyberBtn onClick={generate} disabled={loading} color="#1dbf73">
+        {loading ? "💼 AGENT RUNNING..." : "💼 EXECUTE FIVERR AGENT"}
+      </CyberBtn>
+      <OutputBox text={out} label="FIVERR OUTPUT" color="#1dbf73" />
+      {out && outputType === "gig" && (
+        <Panel color="#1dbf73" style={{ padding: 14, marginTop: 10 }}>
+          <div style={{ fontSize: 9, color: "#1dbf73", letterSpacing: 2, marginBottom: 8 }}>◈ PUBLISH CHECKLIST</div>
+          <div style={{ fontSize: 11, color: N.textDim, lineHeight: 1.8 }}>
+            1. Go to <span style={{ color: "#1dbf73" }}>fiverr.com</span> → My Gigs → Create New Gig<br />
+            2. Paste the title, description and tags above<br />
+            3. Set your 3 packages with the prices listed<br />
+            4. Upload your gig image (cyberpunk design already made)<br />
+            5. Add requirements and publish — live in minutes
+          </div>
+        </Panel>
+      )}
     </div>
   );
 }
