@@ -132,6 +132,7 @@ const AD_PLATFORMS = [
   { id: "youtube", label: "YT ADS" },
 ];
 const AGENTS_META = [
+  { id: "cmd",        label: "COMMAND",    icon: "⌘", color: "#ffffff", num: "00" },
   { id: "content",    label: "CONTENT",    icon: "⚡", color: N.green,  num: "01" },
   { id: "publishing", label: "PUBLISH",    icon: "◈", color: N.cyan,   num: "02" },
   { id: "research",   label: "RESEARCH",   icon: "◎", color: N.yellow, num: "03" },
@@ -916,6 +917,7 @@ export default function AgentEmpire() {
             {active === "revenue"    && <RevenueAgent config={config} log={pushLog} />}
             {active === "etsy"       && <EtsyAgent config={config} log={pushLog} />}
             {active === "fiverr"     && <FiverrAgent config={config} log={pushLog} />}
+            {active === "cmd"       && <CommandAgent config={config} log={pushLog} allAgents={AGENTS_META} />}
           </div>
 
           {/* Activity log sidebar */}
@@ -928,7 +930,7 @@ export default function AgentEmpire() {
 
         {/* Footer */}
         <div style={{ textAlign: "center", marginTop: 24, fontSize: 9, color: N.textDim, letterSpacing: 3 }}>
-          AGENT EMPIRE v3.0 · 7 AGENTS ONLINE · RUNNING 24/7 ON RAILWAY
+          AGENT EMPIRE v3.0 · 8 AGENTS ONLINE · RUNNING 24/7 ON RAILWAY
         </div>
       </div>
 
@@ -1172,6 +1174,425 @@ REQUIREMENTS FROM BUYER: [3-5 things to ask buyer when they order]`,
             5. Add requirements and publish — live in minutes
           </div>
         </Panel>
+      )}
+    </div>
+  );
+}
+
+// ─── AGENT 00: COMMAND ───────────────────────────────────────────────────────
+function CommandAgent({ config, log, allAgents }) {
+  const AGENT_TASKS = {
+    content:    ["Generate viral hook", "Write full script", "Create caption pack", "Build content series"],
+    publishing: ["Repurpose for channel 2", "Translate to Spanish", "Reformat for beginners", "Create faceless version"],
+    research:   ["Find trending topics", "Analyze competitors", "Generate hook formulas", "Find monetization angles"],
+    scheduler:  ["Build 7-day calendar", "Plan weekly themes", "Optimize post times", "Create content roadmap"],
+    revenue:    ["Run profit analysis", "Audit ad spend", "Find revenue gaps", "Build 30-day plan"],
+    etsy:       ["Generate prompt pack listing", "Create template listing", "Build content calendar listing", "Write monetization guide listing"],
+    fiverr:     ["Create new gig", "Write buyer message", "Generate FAQs", "Build upsell script"],
+  };
+
+  const SOCIAL_PLATFORMS = [
+    { id: "tiktok",    label: "TIKTOK",    color: "#a78bfa", fields: ["displayName", "bio", "link", "category"] },
+    { id: "instagram", label: "INSTAGRAM", color: "#f472b6", fields: ["displayName", "bio", "link", "category"] },
+    { id: "youtube",   label: "YOUTUBE",   color: "#f87171", fields: ["channelName", "description", "link", "category"] },
+    { id: "twitter",   label: "X/TWITTER", color: "#60a5fa", fields: ["displayName", "bio", "link", "pinnedTweet"] },
+    { id: "fiverr",    label: "FIVERR",    color: "#1dbf73", fields: ["displayName", "tagline", "skills", "responseTime"] },
+    { id: "etsy",      label: "ETSY",      color: "#ff6b35", fields: ["shopName", "announcement", "aboutShop", "policies"] },
+  ];
+
+  // Terminal state
+  const [termInput, setTermInput] = useState("");
+  const [termLog, setTermLog] = useState([
+    { type: "system", text: "COMMAND AGENT v1.0 INITIALIZED" },
+    { type: "system", text: "ALL 7 SUBORDINATE AGENTS ONLINE" },
+    { type: "system", text: 'TYPE "help" FOR AVAILABLE COMMANDS' },
+    { type: "system", text: "─────────────────────────────────" },
+  ]);
+  const termRef = useRef(null);
+
+  // Auto mode state
+  const [autoMode, setAutoMode] = useState(false);
+  const [autoInterval, setAutoIntervalState] = useState(null);
+  const [autoTasks, setAutoTasks] = useState([]);
+  const [briefing, setBriefing] = useState(null);
+  const [briefingLoading, setBriefingLoading] = useState(false);
+
+  // Social media profile state
+  const [activeProfile, setActiveProfile] = useState("tiktok");
+  const [profiles, setProfiles] = useState({});
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileOut, setProfileOut] = useState("");
+
+  // Task queue
+  const [taskQueue, setTaskQueue] = useState([]);
+  const [completedTasks, setCompletedTasks] = useState([]);
+
+  // Tab state
+  const [tab, setTab] = useState("terminal");
+
+  const pushTerm = useCallback((text, type = "output") => {
+    setTermLog(l => [...l, { type, text, id: Date.now() }]);
+    setTimeout(() => { if (termRef.current) termRef.current.scrollTop = termRef.current.scrollHeight; }, 50);
+  }, []);
+
+  const addTask = useCallback((agentId, task) => {
+    const newTask = { id: Date.now(), agentId, task, status: "queued", time: new Date().toLocaleTimeString("en", { hour12: false }) };
+    setTaskQueue(q => [...q, newTask]);
+    return newTask;
+  }, []);
+
+  const completeTask = useCallback((taskId) => {
+    setTaskQueue(q => q.filter(t => t.id !== taskId));
+    setCompletedTasks(c => [{ id: taskId, completedAt: new Date().toLocaleTimeString("en", { hour12: false }) }, ...c.slice(0, 19)]);
+  }, []);
+
+  // Command parser
+  const handleCommand = useCallback(async (input) => {
+    const cmd = input.trim().toLowerCase();
+    pushTerm(`> ${input}`, "input");
+
+    if (cmd === "help") {
+      pushTerm(`AVAILABLE COMMANDS:
+  status          — show all agent statuses
+  run [agent]     — trigger a specific agent
+  run all         — trigger all agents in sequence
+  brief           — generate daily briefing
+  queue           — show task queue
+  clear           — clear terminal
+  auto on/off     — toggle autonomous mode
+  assign [agent] [task] — assign specific task
+  social [platform]     — manage social profile
+  report          — generate performance report`, "output");
+      return;
+    }
+
+    if (cmd === "status") {
+      const agents = allAgents.filter(a => a.id !== "cmd");
+      agents.forEach(a => pushTerm(`  AG-${a.num} ${a.label.padEnd(12)} ◈ ONLINE — READY`, "output"));
+      pushTerm(`  ${agents.length} AGENTS OPERATIONAL`, "system");
+      return;
+    }
+
+    if (cmd === "clear") { setTermLog([]); return; }
+
+    if (cmd === "queue") {
+      if (taskQueue.length === 0) { pushTerm("TASK QUEUE: EMPTY", "output"); return; }
+      taskQueue.forEach(t => pushTerm(`  [${t.status.toUpperCase()}] AG-${allAgents.find(a=>a.id===t.agentId)?.num} → ${t.task}`, "output"));
+      return;
+    }
+
+    if (cmd === "brief") {
+      setBriefingLoading(true);
+      pushTerm("GENERATING DAILY BRIEFING...", "system");
+      const completed = completedTasks.length;
+      const queued = taskQueue.length;
+      const result = await callClaude(`You are the Command Agent — the AI general manager of an automated content empire in the "${config.niche || "AI & Make Money Online"}" niche.
+
+Generate a sharp, tactical daily briefing report for the empire owner. Include:
+
+EMPIRE STATUS REPORT — ${new Date().toLocaleDateString()}
+
+1. OPERATIONS SUMMARY — ${completed} tasks completed, ${queued} in queue
+2. CONTENT PIPELINE — what should be created today (3 specific content pieces with topics)
+3. REVENUE FOCUS — top 2 monetization actions to take today (Etsy, Fiverr, affiliate)
+4. AGENT DIRECTIVES — specific instructions for each of the 7 agents today
+5. THREAT ANALYSIS — 2 risks or opportunities in the AI/MMO niche right now
+6. COMMANDER'S ORDER — one single most important action to take in the next hour
+
+Be direct, tactical, and specific. No fluff. This is a command briefing.`).catch(() => "ERROR generating briefing.");
+      setBriefing(result);
+      setBriefingLoading(false);
+      pushTerm("BRIEFING GENERATED — VIEW IN BRIEFING TAB", "system");
+      setTab("briefing");
+      return;
+    }
+
+    if (cmd === "auto on") {
+      setAutoMode(true);
+      pushTerm("AUTONOMOUS MODE: ACTIVATED", "system");
+      pushTerm("AGENTS WILL RUN ON 30-MIN INTERVALS", "system");
+      const tasks = Object.entries(AGENT_TASKS).map(([agentId, tasks]) => ({
+        agentId, task: tasks[Math.floor(Math.random() * tasks.length)]
+      }));
+      setAutoTasks(tasks);
+      tasks.forEach(t => { addTask(t.agentId, t.task); pushTerm(`  QUEUED: AG-${allAgents.find(a=>a.id===t.agentId)?.num} → ${t.task}`, "output"); });
+      return;
+    }
+
+    if (cmd === "auto off") {
+      setAutoMode(false);
+      pushTerm("AUTONOMOUS MODE: DEACTIVATED", "system");
+      return;
+    }
+
+    if (cmd === "run all") {
+      pushTerm("INITIATING FULL EMPIRE RUN SEQUENCE...", "system");
+      const agents = allAgents.filter(a => a.id !== "cmd");
+      for (const agent of agents) {
+        const task = AGENT_TASKS[agent.id]?.[0];
+        if (task) { addTask(agent.id, task); pushTerm(`  ◈ AG-${agent.num} ${agent.label} — ${task}`, "output"); }
+        await new Promise(r => setTimeout(r, 300));
+      }
+      pushTerm("ALL AGENTS TASKED — CHECK QUEUE", "system");
+      return;
+    }
+
+    if (cmd.startsWith("run ")) {
+      const agentName = cmd.replace("run ", "").trim();
+      const agent = allAgents.find(a => a.id === agentName || a.label.toLowerCase() === agentName);
+      if (!agent) { pushTerm(`ERROR: AGENT "${agentName}" NOT FOUND`, "error"); return; }
+      const task = AGENT_TASKS[agent.id]?.[0] || "Execute primary directive";
+      addTask(agent.id, task);
+      pushTerm(`AG-${agent.num} ${agent.label} TASKED: ${task}`, "system");
+      log("cmd", `Commanded AG-${agent.num} to: ${task}`);
+      return;
+    }
+
+    if (cmd.startsWith("assign ")) {
+      const parts = cmd.replace("assign ", "").split(" ");
+      const agentName = parts[0];
+      const task = parts.slice(1).join(" ");
+      const agent = allAgents.find(a => a.id === agentName || a.label.toLowerCase() === agentName);
+      if (!agent) { pushTerm(`ERROR: AGENT "${agentName}" NOT FOUND`, "error"); return; }
+      addTask(agent.id, task || AGENT_TASKS[agent.id]?.[0]);
+      pushTerm(`ASSIGNED TO AG-${agent.num}: ${task}`, "system");
+      return;
+    }
+
+    if (cmd.startsWith("social ")) {
+      const platform = cmd.replace("social ", "").trim();
+      const found = SOCIAL_PLATFORMS.find(p => p.id === platform || p.label.toLowerCase().includes(platform));
+      if (found) { setActiveProfile(found.id); setTab("social"); pushTerm(`OPENING ${found.label} PROFILE MANAGER`, "system"); }
+      else pushTerm(`ERROR: PLATFORM "${platform}" NOT FOUND`, "error");
+      return;
+    }
+
+    if (cmd === "report") {
+      pushTerm(`EMPIRE PERFORMANCE REPORT
+  ─────────────────────────
+  AGENTS ONLINE:     8
+  TASKS COMPLETED:   ${completedTasks.length}
+  TASKS IN QUEUE:    ${taskQueue.length}
+  AUTO MODE:         ${autoMode ? "ACTIVE" : "INACTIVE"}
+  NICHE:             ${config.niche || "AI & MMO"}
+  BACKEND:           ONLINE
+  ─────────────────────────`, "output");
+      return;
+    }
+
+    // Natural language fallback — ask Claude
+    pushTerm("PROCESSING COMMAND...", "system");
+    const result = await callClaude(`You are the Command Agent — AI general manager of a content empire. The user typed this command: "${input}". Interpret it and respond with a brief, tactical action plan in under 100 words. Be direct and specific. Use military-style brevity.`).catch(() => "ERROR.");
+    pushTerm(result, "output");
+    log("cmd", `Command executed: ${input}`);
+  }, [taskQueue, completedTasks, autoMode, config, allAgents, pushTerm, addTask, log]);
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && termInput.trim()) {
+      handleCommand(termInput);
+      setTermInput("");
+    }
+  };
+
+  // Generate social profile
+  const generateProfile = async () => {
+    setProfileLoading(true); setProfileOut("");
+    const platform = SOCIAL_PLATFORMS.find(p => p.id === activeProfile);
+    const profileData = profiles[activeProfile] || {};
+    log("cmd", `Generating ${platform.label} profile optimization...`);
+
+    const result = await callClaude(`You are a social media profile optimization expert. Generate a complete optimized profile for ${platform.label} in the "${config.niche || "AI & Make Money Online"}" niche.
+
+Current info: ${JSON.stringify(profileData)}
+
+Generate EXACTLY:
+
+DISPLAY NAME: [catchy, memorable, niche-relevant]
+BIO/DESCRIPTION: [platform-optimized bio that hooks followers, includes keywords, has personality — max character limit for ${platform.label}]
+LINK IN BIO STRATEGY: [what URL to use and why]
+PROFILE KEYWORDS: [5 keywords to naturally include]
+CONTENT PILLARS: [3 content pillars this account should stick to]
+POSTING STRATEGY: [best times, frequency, content mix for ${platform.label}]
+GROWTH HACK: [one specific tactic to get first 1000 followers on ${platform.label}]`).catch(() => "ERROR.");
+
+    setProfileOut(result);
+    setProfileLoading(false);
+    log("cmd", `${platform.label} profile generated`);
+  };
+
+  const agentColors = Object.fromEntries(allAgents.map(a => [a.id, a.color]));
+  const termColors = { system: "#00e5ff", input: N.green, output: N.text, error: "#ff2d55" };
+
+  return (
+    <div>
+      {/* Tab bar */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 14 }}>
+        {[["terminal","⌘ TERMINAL"],["queue","◈ TASK QUEUE"],["social","◉ SOCIAL PROFILES"],["briefing","◎ BRIEFING"]].map(([id, label]) => (
+          <button key={id} onClick={() => setTab(id)} style={{
+            flex: 1, padding: "8px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono,
+            fontSize: 10, letterSpacing: 1.5, fontWeight: 700,
+            border: tab === id ? "1px solid #ffffff" : `1px solid ${N.border}`,
+            background: tab === id ? "#ffffff15" : "transparent",
+            color: tab === id ? "#ffffff" : N.textDim,
+            boxShadow: tab === id ? "0 0 8px #ffffff33" : "none",
+          }}>{label}</button>
+        ))}
+      </div>
+
+      {/* ── TERMINAL TAB ── */}
+      {tab === "terminal" && (
+        <div>
+          <Panel color="#ffffff" style={{ marginBottom: 12 }}>
+            <div style={{ padding: "8px 12px", borderBottom: `1px solid #ffffff22`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 9, color: "#ffffff", letterSpacing: 3 }}>⌘ COMMAND TERMINAL</span>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <span style={{ fontSize: 9, color: autoMode ? N.green : N.textDim, letterSpacing: 1 }}>
+                  AUTO: {autoMode ? "ON" : "OFF"}
+                </span>
+                <button onClick={() => handleCommand(autoMode ? "auto off" : "auto on")} style={{
+                  padding: "3px 10px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono, fontSize: 9,
+                  letterSpacing: 1, border: `1px solid ${autoMode ? N.green : N.border}`,
+                  background: autoMode ? `${N.green}18` : "transparent",
+                  color: autoMode ? N.green : N.textDim,
+                }}>{autoMode ? "DEACTIVATE" : "ACTIVATE"}</button>
+              </div>
+            </div>
+            {/* Terminal output */}
+            <div ref={termRef} style={{ height: 320, overflowY: "auto", padding: 14, fontFamily: N.mono }}>
+              {termLog.map((entry, i) => (
+                <div key={entry.id || i} style={{ fontSize: 11, lineHeight: 1.7, color: termColors[entry.type] || N.text, marginBottom: 2, whiteSpace: "pre-wrap" }}>
+                  {entry.type === "input" ? <span style={{ color: N.green }}>{entry.text}</span> : entry.text}
+                </div>
+              ))}
+              <div className="blink" style={{ display: "inline-block", width: 8, height: 14, background: N.green, marginTop: 4 }} />
+            </div>
+            {/* Input */}
+            <div style={{ padding: "10px 14px", borderTop: `1px solid #ffffff22`, display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 12, color: N.green }}>{">"}</span>
+              <input value={termInput} onChange={e => setTermInput(e.target.value)} onKeyDown={handleKeyDown}
+                placeholder='type command or "help"...'
+                style={{ flex: 1, background: "none", border: "none", color: N.green, fontFamily: N.mono, fontSize: 12, outline: "none" }} />
+            </div>
+          </Panel>
+          {/* Quick commands */}
+          <Panel color="#ffffff22" style={{ padding: 14 }}>
+            <SectionLabel color="#ffffff88">QUICK COMMANDS</SectionLabel>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {["status", "run all", "brief", "queue", "report", "auto on", "run content", "run research", "run scheduler"].map(cmd => (
+                <button key={cmd} onClick={() => { handleCommand(cmd); }} style={{
+                  padding: "5px 12px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono,
+                  fontSize: 9, letterSpacing: 1, border: `1px solid #ffffff22`,
+                  background: "transparent", color: N.textDim,
+                }}>{cmd}</button>
+              ))}
+            </div>
+          </Panel>
+        </div>
+      )}
+
+      {/* ── TASK QUEUE TAB ── */}
+      {tab === "queue" && (
+        <div>
+          <Panel color="#ffffff" style={{ padding: 0, marginBottom: 12 }}>
+            <div style={{ padding: "8px 12px", borderBottom: `1px solid #ffffff22`, display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 9, color: "#ffffff", letterSpacing: 3 }}>◈ ACTIVE QUEUE ({taskQueue.length})</span>
+              <button onClick={() => setTaskQueue([])} style={{ fontSize: 9, color: N.textDim, background: "none", border: `1px solid ${N.border}`, padding: "2px 8px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono }}>CLEAR</button>
+            </div>
+            {taskQueue.length === 0 ? (
+              <div style={{ padding: 20, textAlign: "center", fontSize: 11, color: N.textDim }}>NO TASKS IN QUEUE — TYPE "run all" TO START</div>
+            ) : taskQueue.map(task => {
+              const agent = allAgents.find(a => a.id === task.agentId);
+              return (
+                <div key={task.id} style={{ padding: "10px 14px", borderBottom: `1px solid ${N.border}`, display: "flex", alignItems: "center", gap: 12 }}>
+                  <span style={{ fontSize: 12, color: agent?.color }}>{agent?.icon}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 10, color: agent?.color, letterSpacing: 1 }}>AG-{agent?.num} {agent?.label}</div>
+                    <div style={{ fontSize: 11, color: N.text, marginTop: 2 }}>{task.task}</div>
+                  </div>
+                  <div style={{ fontSize: 9, color: N.textDim }}>{task.time}</div>
+                  <button onClick={() => completeTask(task.id)} style={{ fontSize: 9, color: N.green, background: `${N.green}18`, border: `1px solid ${N.green}44`, padding: "3px 8px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono }}>DONE</button>
+                </div>
+              );
+            })}
+          </Panel>
+          <Panel color="#ffffff22" style={{ padding: 0 }}>
+            <div style={{ padding: "8px 12px", borderBottom: `1px solid #ffffff22` }}>
+              <span style={{ fontSize: 9, color: "#ffffff88", letterSpacing: 3 }}>◈ COMPLETED ({completedTasks.length})</span>
+            </div>
+            {completedTasks.length === 0 ? (
+              <div style={{ padding: 16, fontSize: 11, color: N.textDim, textAlign: "center" }}>NO COMPLETED TASKS YET</div>
+            ) : completedTasks.slice(0, 10).map((t, i) => (
+              <div key={t.id} style={{ padding: "8px 14px", borderBottom: i < 9 ? `1px solid ${N.border}` : "none", fontSize: 10, color: N.textDim }}>
+                ✓ COMPLETED AT {t.completedAt}
+              </div>
+            ))}
+          </Panel>
+        </div>
+      )}
+
+      {/* ── SOCIAL PROFILES TAB ── */}
+      {tab === "social" && (
+        <div>
+          <Panel color="#ffffff22" style={{ padding: 12, marginBottom: 12 }}>
+            <SectionLabel color="#ffffff88">SELECT PLATFORM</SectionLabel>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {SOCIAL_PLATFORMS.map(p => (
+                <button key={p.id} onClick={() => { setActiveProfile(p.id); setProfileOut(""); }} style={{
+                  padding: "7px 14px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono,
+                  fontSize: 10, letterSpacing: 1.5, fontWeight: 700,
+                  border: activeProfile === p.id ? `1px solid ${p.color}` : `1px solid ${N.border}`,
+                  background: activeProfile === p.id ? `${p.color}18` : "transparent",
+                  color: activeProfile === p.id ? p.color : N.textDim,
+                  boxShadow: activeProfile === p.id ? `0 0 8px ${p.color}44` : "none",
+                }}>{p.label}</button>
+              ))}
+            </div>
+          </Panel>
+
+          {(() => {
+            const platform = SOCIAL_PLATFORMS.find(p => p.id === activeProfile);
+            return (
+              <div>
+                <Panel color={platform.color} style={{ padding: 14, marginBottom: 12 }}>
+                  <SectionLabel color={platform.color}>{platform.label} PROFILE DATA</SectionLabel>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    {platform.fields.map(field => (
+                      <div key={field}>
+                        <div style={{ fontSize: 9, color: N.textDim, letterSpacing: 1.5, marginBottom: 5, textTransform: "uppercase" }}>{field.replace(/([A-Z])/g, ' $1').trim()}</div>
+                        <input value={profiles[activeProfile]?.[field] || ""} onChange={e => setProfiles(p => ({ ...p, [activeProfile]: { ...p[activeProfile], [field]: e.target.value } }))}
+                          placeholder={`> enter ${field}...`}
+                          style={{ width: "100%", background: N.dark, border: `1px solid ${N.border}`, color: N.text, fontFamily: N.mono, fontSize: 11, padding: "8px 10px", borderRadius: 2, outline: "none" }} />
+                      </div>
+                    ))}
+                  </div>
+                </Panel>
+                <AgentStatusBar agentId="cmd" loading={profileLoading} statusText={`OPTIMIZING ${platform.label} PROFILE...`} />
+                <CyberBtn onClick={generateProfile} disabled={profileLoading} color={platform.color}>
+                  {profileLoading ? "⌘ OPTIMIZING..." : `⌘ OPTIMIZE ${platform.label} PROFILE`}
+                </CyberBtn>
+                <OutputBox text={profileOut} label={`${platform.label} PROFILE OUTPUT`} color={platform.color} />
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* ── BRIEFING TAB ── */}
+      {tab === "briefing" && (
+        <div>
+          <AgentStatusBar agentId="cmd" loading={briefingLoading} statusText="GENERATING EMPIRE BRIEFING..." />
+          <CyberBtn onClick={() => handleCommand("brief")} disabled={briefingLoading} color="#ffffff" style={{ marginBottom: 14 }}>
+            {briefingLoading ? "⌘ GENERATING..." : "⌘ GENERATE TODAY'S BRIEFING"}
+          </CyberBtn>
+          {briefing ? (
+            <OutputBox text={briefing} label="DAILY EMPIRE BRIEFING" color="#ffffff" />
+          ) : (
+            <Panel color="#ffffff22" style={{ padding: 30, textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: N.textDim, letterSpacing: 2 }}>NO BRIEFING YET</div>
+              <div style={{ fontSize: 9, color: N.textDim, marginTop: 6 }}>CLICK GENERATE OR TYPE "brief" IN TERMINAL</div>
+            </Panel>
+          )}
+        </div>
       )}
     </div>
   );
