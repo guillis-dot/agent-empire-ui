@@ -1,107 +1,91 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 
+// ─── CONFIG ──────────────────────────────────────────────────────────────────
 const BACKEND = "https://agent-empire-backend-production.up.railway.app";
+const SUPABASE_URL = "https://ewahhppqyoqaewoxwspj.supabase.co";
+const SUPABASE_KEY = "sb_publishable_dskneAba0v6z-PXVao4iNQ_M_WLz5VJ";
+const ALLOWED_EMAIL = ""; // Set your email here after first login
 
 // ─── DESIGN TOKENS ───────────────────────────────────────────────────────────
-const N = {
-  black:   "#000508",
-  dark:    "#020c10",
-  panel:   "#040f14",
-  border:  "#0a2a1f",
-  green:   "#00ff88",
-  cyan:    "#00e5ff",
-  yellow:  "#ffe500",
-  red:     "#ff2d55",
-  purple:  "#b000ff",
-  dim:     "#0a4a30",
-  dimC:    "#003a4a",
-  text:    "#a0ffcc",
-  textDim: "#1a4a35",
-  mono:    "'Courier New', monospace",
+const light = {
+  bg:       "#ffffff",
+  bg2:      "#f8f9fa",
+  bg3:      "#f1f3f5",
+  border:   "#e9ecef",
+  border2:  "#dee2e6",
+  text:     "#1a1a2e",
+  text2:    "#6c757d",
+  text3:    "#adb5bd",
+  accent:   "#6366f1",
+  accent2:  "#818cf8",
+  accentBg: "#eef2ff",
+  green:    "#10b981",
+  greenBg:  "#d1fae5",
+  red:      "#ef4444",
+  redBg:    "#fee2e2",
+  yellow:   "#f59e0b",
+  yellowBg: "#fef3c7",
+  blue:     "#3b82f6",
+  blueBg:   "#dbeafe",
+  purple:   "#8b5cf6",
+  purpleBg: "#ede9fe",
+  orange:   "#f97316",
+  orangeBg: "#ffedd5",
+  emerald:  "#059669",
+  emeraldBg:"#d1fae5",
+  shadow:   "0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)",
+  shadow2:  "0 4px 6px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.04)",
+  shadow3:  "0 10px 15px rgba(0,0,0,0.08), 0 4px 6px rgba(0,0,0,0.04)",
 };
-
-// ─── GLOBAL STYLES ───────────────────────────────────────────────────────────
-const globalCSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: ${N.black}; color: ${N.text}; font-family: 'Share Tech Mono', monospace; }
-  ::-webkit-scrollbar { width: 4px; } 
-  ::-webkit-scrollbar-track { background: ${N.dark}; }
-  ::-webkit-scrollbar-thumb { background: ${N.green}; border-radius: 2px; }
-
-  @keyframes scanline {
-    0% { transform: translateY(-100%); }
-    100% { transform: translateY(100vh); }
-  }
-  @keyframes flicker {
-    0%,100% { opacity: 1; } 92% { opacity: 1; } 93% { opacity: 0.8; } 95% { opacity: 1; } 97% { opacity: 0.9; }
-  }
-  @keyframes pulse-green {
-    0%,100% { box-shadow: 0 0 4px ${N.green}44, inset 0 0 4px ${N.green}11; }
-    50% { box-shadow: 0 0 12px ${N.green}88, inset 0 0 8px ${N.green}22; }
-  }
-  @keyframes pulse-cyan {
-    0%,100% { box-shadow: 0 0 4px ${N.cyan}44; }
-    50% { box-shadow: 0 0 16px ${N.cyan}99; }
-  }
-  @keyframes blink {
-    0%,100% { opacity: 1; } 50% { opacity: 0; }
-  }
-  @keyframes slide-in {
-    from { opacity: 0; transform: translateX(-10px); }
-    to { opacity: 1; transform: translateX(0); }
-  }
-  @keyframes typing {
-    from { width: 0; } to { width: 100%; }
-  }
-  @keyframes spin-slow {
-    from { transform: rotate(0deg); } to { transform: rotate(360deg); }
-  }
-  @keyframes data-flow {
-    0% { opacity: 0; transform: translateY(8px); }
-    20% { opacity: 1; }
-    80% { opacity: 1; }
-    100% { opacity: 0; transform: translateY(-8px); }
-  }
-  @keyframes glow-pulse {
-    0%,100% { text-shadow: 0 0 4px ${N.green}, 0 0 8px ${N.green}66; }
-    50% { text-shadow: 0 0 8px ${N.green}, 0 0 20px ${N.green}99, 0 0 40px ${N.green}44; }
-  }
-  @keyframes border-flow {
-    0% { border-color: ${N.green}44; }
-    50% { border-color: ${N.cyan}88; }
-    100% { border-color: ${N.green}44; }
-  }
-  @keyframes progress-fill {
-    from { width: 0%; } to { width: 100%; }
-  }
-  .agent-active { animation: pulse-green 2s infinite; }
-  .glow-text { animation: glow-pulse 3s infinite; }
-  .flicker { animation: flicker 8s infinite; }
-  .blink { animation: blink 1s infinite; }
-  .spin { animation: spin-slow 4s linear infinite; }
-  .slide-in { animation: slide-in 0.3s ease forwards; }
-  .border-flow { animation: border-flow 3s infinite; }
-`;
+const dark = {
+  bg:       "#0f0f13",
+  bg2:      "#161620",
+  bg3:      "#1e1e2e",
+  border:   "#2a2a3e",
+  border2:  "#363650",
+  text:     "#e2e8f0",
+  text2:    "#94a3b8",
+  text3:    "#475569",
+  accent:   "#818cf8",
+  accent2:  "#a5b4fc",
+  accentBg: "#1e1b4b",
+  green:    "#34d399",
+  greenBg:  "#064e3b",
+  red:      "#f87171",
+  redBg:    "#450a0a",
+  yellow:   "#fbbf24",
+  yellowBg: "#451a03",
+  blue:     "#60a5fa",
+  blueBg:   "#1e3a5f",
+  purple:   "#a78bfa",
+  purpleBg: "#2e1065",
+  orange:   "#fb923c",
+  orangeBg: "#431407",
+  emerald:  "#34d399",
+  emeraldBg:"#064e3b",
+  shadow:   "0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3)",
+  shadow2:  "0 4px 6px rgba(0,0,0,0.3), 0 2px 4px rgba(0,0,0,0.2)",
+  shadow3:  "0 10px 15px rgba(0,0,0,0.4), 0 4px 6px rgba(0,0,0,0.3)",
+};
 
 // ─── DATA ────────────────────────────────────────────────────────────────────
 const PLATFORMS = [
-  { id: "tiktok", label: "TIKTOK", icon: "◈" },
-  { id: "youtube", label: "YT SHORTS", icon: "▶" },
-  { id: "instagram", label: "INSTAGRAM", icon: "◉" },
-  { id: "twitter", label: "X / TWITTER", icon: "✕" },
+  { id: "tiktok",    label: "TikTok",         icon: "🎵" },
+  { id: "youtube",   label: "YouTube Shorts",  icon: "▶️" },
+  { id: "instagram", label: "Instagram",       icon: "📸" },
+  { id: "twitter",   label: "X / Twitter",     icon: "𝕏" },
 ];
 const CONTENT_TYPES = [
-  { id: "hook", label: "VIRAL HOOK" },
-  { id: "script", label: "FULL SCRIPT" },
-  { id: "caption", label: "CAPTION+TAGS" },
-  { id: "series", label: "SERIES" },
+  { id: "hook",    label: "Viral Hook" },
+  { id: "script",  label: "Full Script" },
+  { id: "caption", label: "Caption + Tags" },
+  { id: "series",  label: "Content Series" },
 ];
 const TONES = [
-  { id: "hype", label: "HYPE" },
-  { id: "educational", label: "EDUCATE" },
-  { id: "controversial", label: "PROVOKE" },
-  { id: "story", label: "STORY" },
+  { id: "hype",          label: "Hype" },
+  { id: "educational",   label: "Educational" },
+  { id: "controversial", label: "Controversial" },
+  { id: "story",         label: "Storytelling" },
 ];
 const TOPICS = [
   "AI Tools That Make You Money While You Sleep",
@@ -114,32 +98,32 @@ const TOPICS = [
   "AI Video Creation Business 2026",
 ];
 const RESEARCH_CATS = [
-  { id: "trending", label: "TRENDING NOW" },
-  { id: "hooks", label: "HOOK FORMULAS" },
-  { id: "competitors", label: "COMPETITOR INTEL" },
-  { id: "monetization", label: "MONETIZATION" },
+  { id: "trending",     label: "Trending Now",       desc: "Viral topics this week" },
+  { id: "hooks",        label: "Hook Formulas",       desc: "Proven scroll-stoppers" },
+  { id: "competitors",  label: "Competitor Intel",    desc: "What's working in niche" },
+  { id: "monetization", label: "Monetization Angles", desc: "Revenue-focused ideas" },
 ];
 const SECOND_STYLES = [
-  { id: "beginner", label: "BEGINNER MODE" },
-  { id: "advanced", label: "ADVANCED MODE" },
-  { id: "faceless", label: "FACELESS BRAND" },
-  { id: "spanish", label: "ESPAÑOL" },
+  { id: "beginner",  label: "Beginner Friendly" },
+  { id: "advanced",  label: "Advanced / Pro" },
+  { id: "faceless",  label: "Faceless Brand" },
+  { id: "spanish",   label: "Spanish Audience" },
 ];
 const AD_PLATFORMS = [
-  { id: "tiktok", label: "TIKTOK ADS" },
-  { id: "meta", label: "META ADS" },
-  { id: "google", label: "GOOGLE ADS" },
-  { id: "youtube", label: "YT ADS" },
+  { id: "tiktok",   label: "TikTok Ads" },
+  { id: "meta",     label: "Meta Ads" },
+  { id: "google",   label: "Google Ads" },
+  { id: "youtube",  label: "YouTube Ads" },
 ];
 const AGENTS_META = [
-  { id: "cmd",        label: "COMMAND",    icon: "⌘", color: "#ffffff", num: "00" },
-  { id: "content",    label: "CONTENT",    icon: "⚡", color: N.green,  num: "01" },
-  { id: "publishing", label: "PUBLISH",    icon: "◈", color: N.cyan,   num: "02" },
-  { id: "research",   label: "RESEARCH",   icon: "◎", color: N.yellow, num: "03" },
-  { id: "scheduler",  label: "SCHEDULER",  icon: "◷", color: N.purple, num: "04" },
-  { id: "revenue",    label: "REVENUE",    icon: "◆", color: N.red,    num: "05" },
-  { id: "etsy",       label: "ETSY",       icon: "🛍", color: "#ff6b35", num: "06" },
-  { id: "fiverr",     label: "FIVERR",     icon: "💼", color: "#1dbf73", num: "07" },
+  { id: "cmd",        label: "Command",    icon: "⌘",  color: "accent",   num: "00" },
+  { id: "content",    label: "Content",    icon: "⚡",  color: "purple",   num: "01" },
+  { id: "publishing", label: "Publish",    icon: "◈",  color: "blue",     num: "02" },
+  { id: "research",   label: "Research",   icon: "◎",  color: "yellow",   num: "03" },
+  { id: "scheduler",  label: "Scheduler",  icon: "📅",  color: "green",    num: "04" },
+  { id: "revenue",    label: "Revenue",    icon: "💰",  color: "red",      num: "05" },
+  { id: "etsy",       label: "Etsy",       icon: "🛍",  color: "orange",   num: "06" },
+  { id: "fiverr",     label: "Fiverr",     icon: "💼",  color: "emerald",  num: "07" },
 ];
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -149,306 +133,239 @@ async function callClaude(prompt) {
     body: JSON.stringify({ prompt }),
   });
   const d = await r.json();
-  return d.content || "ERROR: No output received.";
+  return d.content || "No output received.";
 }
 async function saveToBackend(endpoint, data) {
-  try { await fetch(`${BACKEND}${endpoint}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }); } catch (e) { }
+  try { await fetch(`${BACKEND}${endpoint}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }); } catch (e) {}
 }
 function useCopy() {
   const [copied, setCopied] = useState(false);
   const copy = useCallback((text) => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); }, []);
   return [copied, copy];
 }
-
-// ─── AGENT ACTIVITY LOG ──────────────────────────────────────────────────────
 function useActivityLog() {
   const [log, setLog] = useState([]);
   const push = useCallback((agentId, msg) => {
-    const color = AGENTS_META.find(a => a.id === agentId)?.color || N.green;
-    setLog(l => [{ id: Date.now(), agentId, msg, color, time: new Date().toLocaleTimeString("en", { hour12: false }) }, ...l.slice(0, 49)]);
+    setLog(l => [{ id: Date.now(), agentId, msg, time: new Date().toLocaleTimeString("en", { hour12: false }) }, ...l.slice(0, 49)]);
   }, []);
   return [log, push];
 }
 
 // ─── UI PRIMITIVES ───────────────────────────────────────────────────────────
-function Panel({ children, color, style, className }) {
+function Card({ children, T, style }) {
   return (
-    <div className={className} style={{
-      border: `1px solid ${color || N.green}44`,
-      background: N.panel,
-      borderRadius: 2,
-      position: "relative",
-      ...style,
-    }}>
-      <div style={{ position: "absolute", top: 0, left: 0, width: 6, height: 6, borderTop: `1px solid ${color || N.green}`, borderLeft: `1px solid ${color || N.green}` }} />
-      <div style={{ position: "absolute", top: 0, right: 0, width: 6, height: 6, borderTop: `1px solid ${color || N.green}`, borderRight: `1px solid ${color || N.green}` }} />
-      <div style={{ position: "absolute", bottom: 0, left: 0, width: 6, height: 6, borderBottom: `1px solid ${color || N.green}`, borderLeft: `1px solid ${color || N.green}` }} />
-      <div style={{ position: "absolute", bottom: 0, right: 0, width: 6, height: 6, borderBottom: `1px solid ${color || N.green}`, borderRight: `1px solid ${color || N.green}` }} />
-      {children}
-    </div>
+    <div style={{
+      background: T.bg2, border: `1px solid ${T.border}`,
+      borderRadius: 12, padding: 20, marginBottom: 12,
+      boxShadow: T.shadow, ...style,
+    }}>{children}</div>
   );
 }
 
-function CyberBtn({ children, onClick, disabled, color, style }) {
-  const c = color || N.green;
+function Label({ children, T }) {
+  return <div style={{ fontSize: 11, fontWeight: 600, color: T.text2, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>{children}</div>;
+}
+
+function Chip({ label, active, onClick, color, T }) {
+  const c = T[color] || T.accent;
+  const bg = T[color + "Bg"] || T.accentBg;
+  return (
+    <button onClick={onClick} style={{
+      padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 500,
+      border: `1px solid ${active ? c : T.border}`,
+      background: active ? bg : "transparent",
+      color: active ? c : T.text2,
+      transition: "all 0.15s",
+    }}>{label}</button>
+  );
+}
+
+function Input({ value, onChange, placeholder, multiline, T }) {
+  const s = {
+    width: "100%", padding: "10px 14px", borderRadius: 8,
+    border: `1px solid ${T.border2}`, background: T.bg,
+    color: T.text, fontSize: 14, outline: "none",
+    fontFamily: "inherit", resize: multiline ? "vertical" : "none",
+    minHeight: multiline ? 90 : "auto", boxSizing: "border-box",
+    transition: "border-color 0.15s",
+  };
+  return multiline
+    ? <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={s} />
+    : <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={s} />;
+}
+
+function Btn({ children, onClick, disabled, variant, T, style }) {
+  const variants = {
+    primary:  { bg: T.accent,   color: "#fff", border: T.accent },
+    success:  { bg: T.green,    color: "#fff", border: T.green },
+    danger:   { bg: T.red,      color: "#fff", border: T.red },
+    warning:  { bg: T.yellow,   color: "#fff", border: T.yellow },
+    ghost:    { bg: "transparent", color: T.text2, border: T.border2 },
+    purple:   { bg: T.purple,   color: "#fff", border: T.purple },
+    blue:     { bg: T.blue,     color: "#fff", border: T.blue },
+    orange:   { bg: T.orange,   color: "#fff", border: T.orange },
+    emerald:  { bg: T.emerald,  color: "#fff", border: T.emerald },
+  };
+  const v = variants[variant] || variants.primary;
   return (
     <button onClick={onClick} disabled={disabled} style={{
-      background: disabled ? "transparent" : `${c}11`,
-      border: `1px solid ${disabled ? N.textDim : c}`,
-      color: disabled ? N.textDim : c,
-      padding: "10px 14px", borderRadius: 2, cursor: disabled ? "not-allowed" : "pointer",
-      fontFamily: N.mono, fontSize: 12, fontWeight: 700, letterSpacing: 2,
-      textTransform: "uppercase", width: "100%", transition: "all 0.15s",
-      boxShadow: disabled ? "none" : `0 0 8px ${c}33`,
-      ...style,
-    }}>
+      width: "100%", padding: "11px 20px", borderRadius: 10,
+      border: `1px solid ${disabled ? T.border : v.border}`,
+      background: disabled ? T.bg3 : v.bg,
+      color: disabled ? T.text3 : v.color,
+      fontSize: 14, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer",
+      transition: "all 0.15s", fontFamily: "inherit", ...style,
+    }}>{children}</button>
+  );
+}
+
+function Badge({ children, color, T }) {
+  const c = T[color] || T.accent;
+  const bg = T[(color || "accent") + "Bg"] || T.accentBg;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 10px", borderRadius: 20, background: bg, color: c, fontSize: 11, fontWeight: 600 }}>
       {children}
-    </button>
+    </span>
   );
 }
 
-function CyberSelect({ options, value, onChange, color }) {
-  const c = color || N.green;
-  return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-      {options.map(o => (
-        <button key={o.id} onClick={() => onChange(o.id)} style={{
-          padding: "6px 12px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono,
-          fontSize: 10, letterSpacing: 1.5, fontWeight: 700, textTransform: "uppercase",
-          border: value === o.id ? `1px solid ${c}` : `1px solid ${N.border}`,
-          background: value === o.id ? `${c}18` : "transparent",
-          color: value === o.id ? c : N.textDim,
-          boxShadow: value === o.id ? `0 0 6px ${c}44` : "none",
-          transition: "all 0.15s",
-        }}>{o.label || o.icon && `${o.icon} ${o.label}`}</button>
-      ))}
-    </div>
-  );
-}
-
-function CyberInput({ value, onChange, placeholder, multiline }) {
-  const props = { value, onChange: e => onChange(e.target.value), placeholder, style: {
-    width: "100%", background: N.dark, border: `1px solid ${N.border}`,
-    color: N.text, fontFamily: N.mono, fontSize: 12, padding: "10px 12px",
-    borderRadius: 2, outline: "none", resize: multiline ? "vertical" : "none",
-    minHeight: multiline ? 80 : "auto",
-  }};
-  return multiline ? <textarea {...props} /> : <input {...props} />;
-}
-
-function SectionLabel({ children, color }) {
-  return (
-    <div style={{ fontSize: 9, fontWeight: 700, color: color || N.green, letterSpacing: 3,
-      textTransform: "uppercase", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
-      <div style={{ height: 1, width: 16, background: color || N.green }} />
-      {children}
-      <div style={{ height: 1, flex: 1, background: `${color || N.green}33` }} />
-    </div>
-  );
-}
-
-// ─── AGENT STATUS DISPLAY ────────────────────────────────────────────────────
-function AgentStatusBar({ agentId, loading, statusText }) {
-  const meta = AGENTS_META.find(a => a.id === agentId);
-  const [dots, setDots] = useState("");
-  const [dataLines, setDataLines] = useState([]);
-
-  useEffect(() => {
-    if (!loading) { setDots(""); setDataLines([]); return; }
-    const dotInterval = setInterval(() => setDots(d => d.length >= 3 ? "" : d + "."), 400);
-    const lineInterval = setInterval(() => {
-      const lines = [
-        `> INITIALIZING ${meta?.label} PROTOCOL...`,
-        `> CONNECTING TO ANTHROPIC API...`,
-        `> PROCESSING REQUEST...`,
-        `> GENERATING OUTPUT STREAM...`,
-        `> COMPILING RESPONSE DATA...`,
-        `> RUNNING NLP ANALYSIS...`,
-        `> OPTIMIZING CONTENT VECTORS...`,
-        `> CROSS-REFERENCING TREND DATA...`,
-        `> FINALIZING OUTPUT...`,
-      ];
-      setDataLines(l => [lines[Math.floor(Math.random() * lines.length)], ...l.slice(0, 3)]);
-    }, 600);
-    return () => { clearInterval(dotInterval); clearInterval(lineInterval); };
-  }, [loading, agentId]);
-
-  if (!loading) return null;
-
-  return (
-    <Panel color={meta?.color} style={{ padding: 16, marginBottom: 16 }} className="agent-active">
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-        <div className="spin" style={{ fontSize: 20, color: meta?.color }}>{meta?.icon}</div>
-        <div>
-          <div style={{ fontSize: 11, color: meta?.color, letterSpacing: 2, fontWeight: 700 }}>
-            AGENT {meta?.num} — {meta?.label} ACTIVE{dots}
-          </div>
-          <div style={{ fontSize: 10, color: N.textDim, letterSpacing: 1, marginTop: 2 }}>{statusText}</div>
-        </div>
-        <div className="blink" style={{ marginLeft: "auto", width: 8, height: 8, borderRadius: "50%", background: meta?.color }} />
-      </div>
-      <div style={{ borderTop: `1px solid ${meta?.color}22`, paddingTop: 10 }}>
-        {dataLines.map((l, i) => (
-          <div key={i} style={{ fontSize: 9, color: i === 0 ? meta?.color : N.textDim, letterSpacing: 1, marginBottom: 3,
-            animation: "data-flow 2s ease forwards", opacity: 1 - i * 0.25 }}>{l}</div>
-        ))}
-      </div>
-      <div style={{ marginTop: 10, height: 2, background: N.border, borderRadius: 1, overflow: "hidden" }}>
-        <div style={{ height: "100%", background: `linear-gradient(90deg, ${meta?.color}, ${N.cyan})`,
-          animation: "progress-fill 2s ease infinite", borderRadius: 1 }} />
-      </div>
-    </Panel>
-  );
-}
-
-// ─── OUTPUT BOX ──────────────────────────────────────────────────────────────
-function OutputBox({ text, label, color }) {
+function OutputBox({ text, label, color, T }) {
   const [copied, copy] = useCopy();
-  const c = color || N.green;
+  const c = T[color] || T.accent;
   if (!text) return null;
   return (
-    <Panel color={c} style={{ marginTop: 16 }} className="slide-in">
-      <div style={{ padding: "8px 12px", borderBottom: `1px solid ${c}22`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: 9, color: c, letterSpacing: 3 }}>◈ {label || "OUTPUT"}</span>
-        <button onClick={() => copy(text)} style={{ fontSize: 9, color: copied ? N.green : N.textDim, background: "none", border: `1px solid ${copied ? N.green : N.border}`, padding: "3px 8px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono, letterSpacing: 1 }}>
-          {copied ? "✓ COPIED" : "COPY"}
+    <div style={{ marginTop: 16, borderRadius: 10, border: `1px solid ${T.border}`, background: T.bg2, overflow: "hidden" }}>
+      <div style={{ padding: "10px 16px", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", background: T.bg3 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: c }}>{label || "Output"}</span>
+        <button onClick={() => copy(text)} style={{ fontSize: 12, color: copied ? T.green : T.text2, background: "none", border: `1px solid ${T.border2}`, padding: "3px 10px", borderRadius: 6, cursor: "pointer", fontFamily: "inherit" }}>
+          {copied ? "✓ Copied" : "Copy"}
         </button>
       </div>
-      <div style={{ padding: 14, fontSize: 12, lineHeight: 1.9, color: N.text, whiteSpace: "pre-wrap" }}>{text}</div>
-    </Panel>
+      <div style={{ padding: 16, fontSize: 14, lineHeight: 1.8, color: T.text, whiteSpace: "pre-wrap" }}>{text}</div>
+    </div>
   );
 }
 
-// ─── CONFIG DRAWER ───────────────────────────────────────────────────────────
-function ConfigDrawer({ open, onClose, config, setConfig, activeAgent }) {
-  const meta = AGENTS_META.find(a => a.id === activeAgent);
-  if (!open) return null;
-
-  const agentConfigs = {
-    content: [
-      { key: "maxTokens", label: "MAX OUTPUT TOKENS", type: "range", min: 200, max: 2000, step: 100 },
-      { key: "temperature", label: "CREATIVITY LEVEL", type: "range", min: 0, max: 10, step: 1 },
-      { key: "contentLang", label: "OUTPUT LANGUAGE", type: "select", options: ["English", "Spanish", "French", "Portuguese"] },
-      { key: "hashtagCount", label: "HASHTAG COUNT", type: "range", min: 5, max: 30, step: 1 },
-    ],
-    publishing: [
-      { key: "rewriteDepth", label: "REWRITE INTENSITY", type: "select", options: ["Light", "Medium", "Heavy", "Complete"] },
-      { key: "addEmoji", label: "ADD EMOJIS", type: "toggle" },
-      { key: "addCTA", label: "FORCE CTA", type: "toggle" },
-    ],
-    research: [
-      { key: "researchDepth", label: "RESEARCH DEPTH", type: "select", options: ["Quick (5 topics)", "Standard (8 topics)", "Deep (15 topics)"] },
-      { key: "includeStats", label: "INCLUDE STATISTICS", type: "toggle" },
-      { key: "includeExamples", label: "INCLUDE EXAMPLES", type: "toggle" },
-    ],
-    scheduler: [
-      { key: "timezone", label: "TIMEZONE", type: "select", options: ["EST", "CST", "PST", "GMT", "UTC"] },
-      { key: "startTime", label: "FIRST POST TIME", type: "select", options: ["6:00 AM", "7:00 AM", "8:00 AM", "9:00 AM"] },
-      { key: "spacing", label: "POST SPACING", type: "select", options: ["2 hours", "3 hours", "4 hours", "6 hours"] },
-    ],
-    revenue: [
-      { key: "currency", label: "CURRENCY", type: "select", options: ["USD", "EUR", "GBP", "CAD"] },
-      { key: "taxRate", label: "TAX RATE %", type: "range", min: 0, max: 40, step: 1 },
-      { key: "profitAlert", label: "PROFIT ALERT THRESHOLD $", type: "range", min: 100, max: 10000, step: 100 },
-    ],
-  };
-
-  const fields = agentConfigs[activeAgent] || [];
-
+function LoadingBar({ loading, color, T }) {
+  if (!loading) return null;
+  const c = T[color] || T.accent;
   return (
-    <div style={{ position: "fixed", top: 0, right: 0, width: 320, height: "100vh", background: N.dark,
-      borderLeft: `1px solid ${meta?.color}44`, zIndex: 100, overflowY: "auto", animation: "slide-in 0.2s ease" }}>
-      <div style={{ padding: "16px 18px", borderBottom: `1px solid ${meta?.color}22`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <div style={{ fontSize: 9, color: meta?.color, letterSpacing: 3 }}>◈ AGENT {meta?.num} CONFIG</div>
-          <div style={{ fontSize: 13, color: N.text, letterSpacing: 2, marginTop: 2 }}>{meta?.label} SETTINGS</div>
-        </div>
-        <button onClick={onClose} style={{ background: "none", border: `1px solid ${N.border}`, color: N.textDim,
-          width: 28, height: 28, borderRadius: 2, cursor: "pointer", fontFamily: N.mono, fontSize: 12 }}>✕</button>
-      </div>
-
-      <div style={{ padding: 18 }}>
-        {/* Global Settings */}
-        <SectionLabel color={meta?.color}>GLOBAL</SectionLabel>
-        <Panel color={N.border} style={{ padding: 14, marginBottom: 16 }}>
-          <div style={{ fontSize: 10, color: N.textDim, letterSpacing: 1, marginBottom: 8 }}>NICHE / INDUSTRY</div>
-          <CyberInput value={config.niche || "AI & Make Money Online"} onChange={v => setConfig(c => ({ ...c, niche: v }))} />
-          <div style={{ fontSize: 10, color: N.textDim, letterSpacing: 1, marginBottom: 8, marginTop: 12 }}>BRAND VOICE</div>
-          <CyberSelect value={config.brandVoice || "hype"} onChange={v => setConfig(c => ({ ...c, brandVoice: v }))}
-            options={[{ id: "hype", label: "HYPE" }, { id: "pro", label: "PRO" }, { id: "casual", label: "CASUAL" }, { id: "authority", label: "AUTHORITY" }]} color={meta?.color} />
-        </Panel>
-
-        {/* Agent-specific settings */}
-        <SectionLabel color={meta?.color}>AGENT {meta?.num} OPTIONS</SectionLabel>
-        <Panel color={meta?.color} style={{ padding: 14, marginBottom: 16 }}>
-          {fields.map(field => (
-            <div key={field.key} style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 10, color: N.textDim, letterSpacing: 1, marginBottom: 6 }}>{field.label}</div>
-              {field.type === "range" && (
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <input type="range" min={field.min} max={field.max} step={field.step}
-                    value={config[field.key] ?? field.min}
-                    onChange={e => setConfig(c => ({ ...c, [field.key]: Number(e.target.value) }))}
-                    style={{ flex: 1, accentColor: meta?.color }} />
-                  <span style={{ fontSize: 11, color: meta?.color, minWidth: 36, textAlign: "right" }}>{config[field.key] ?? field.min}</span>
-                </div>
-              )}
-              {field.type === "select" && (
-                <CyberSelect value={config[field.key] || field.options[0]}
-                  onChange={v => setConfig(c => ({ ...c, [field.key]: v }))}
-                  options={field.options.map(o => ({ id: o, label: o }))} color={meta?.color} />
-              )}
-              {field.type === "toggle" && (
-                <button onClick={() => setConfig(c => ({ ...c, [field.key]: !c[field.key] }))} style={{
-                  padding: "5px 14px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono,
-                  fontSize: 10, letterSpacing: 2, border: `1px solid ${config[field.key] ? meta?.color : N.border}`,
-                  background: config[field.key] ? `${meta?.color}18` : "transparent",
-                  color: config[field.key] ? meta?.color : N.textDim,
-                }}>
-                  {config[field.key] ? "■ ON" : "□ OFF"}
-                </button>
-              )}
-            </div>
-          ))}
-        </Panel>
-
-        {/* Backend status */}
-        <SectionLabel color={N.cyan}>SYSTEM</SectionLabel>
-        <Panel color={N.cyan} style={{ padding: 14 }}>
-          <div style={{ fontSize: 10, color: N.textDim, letterSpacing: 1, marginBottom: 6 }}>BACKEND ENDPOINT</div>
-          <div style={{ fontSize: 9, color: N.cyan, wordBreak: "break-all" }}>{BACKEND}</div>
-          <div style={{ marginTop: 10, fontSize: 10, color: N.textDim, letterSpacing: 1, marginBottom: 6 }}>VERSION</div>
-          <div style={{ fontSize: 9, color: N.cyan }}>AGENT EMPIRE v3.0 — CYBERPUNK</div>
-        </Panel>
+    <div style={{ marginBottom: 12, padding: 16, borderRadius: 10, background: T[color + "Bg"] || T.accentBg, border: `1px solid ${c}33`, display: "flex", alignItems: "center", gap: 12 }}>
+      <div style={{ width: 8, height: 8, borderRadius: "50%", background: c, animation: "pulse 1.5s infinite" }} />
+      <span style={{ fontSize: 13, color: c, fontWeight: 500 }}>Agent running...</span>
+      <div style={{ flex: 1, height: 3, background: T.border, borderRadius: 2, overflow: "hidden", marginLeft: "auto" }}>
+        <div style={{ height: "100%", background: c, borderRadius: 2, animation: "progress 2s ease infinite", width: "60%" }} />
       </div>
     </div>
   );
 }
 
-// ─── ACTIVITY LOG ────────────────────────────────────────────────────────────
-function ActivityLog({ log }) {
+// ─── SUPABASE AUTH ───────────────────────────────────────────────────────────
+async function supabaseSignIn(email, password) {
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY },
+    body: JSON.stringify({ email, password }),
+  });
+  return r.json();
+}
+async function supabaseSignUp(email, password) {
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY },
+    body: JSON.stringify({ email, password }),
+  });
+  return r.json();
+}
+async function supabaseGetUser(token) {
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    headers: { "Authorization": `Bearer ${token}`, "apikey": SUPABASE_KEY },
+  });
+  return r.json();
+}
+
+// ─── LOGIN PAGE ──────────────────────────────────────────────────────────────
+function LoginPage({ T, darkMode, setDarkMode, onLogin }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [mode, setMode] = useState("login");
+
+  const handleAuth = async () => {
+    if (!email || !password) { setError("Enter your email and password."); return; }
+    setLoading(true); setError("");
+    try {
+      const result = mode === "login"
+        ? await supabaseSignIn(email, password)
+        : await supabaseSignUp(email, password);
+      if (result.access_token) {
+        localStorage.setItem("ae_token", result.access_token);
+        localStorage.setItem("ae_email", email);
+        onLogin(result.access_token, email);
+      } else {
+        setError(result.error_description || result.msg || "Authentication failed.");
+      }
+    } catch (e) { setError("Connection error. Try again."); }
+    setLoading(false);
+  };
+
   return (
-    <Panel color={N.green} style={{ padding: 0, height: "100%" }}>
-      <div style={{ padding: "8px 12px", borderBottom: `1px solid ${N.border}`, fontSize: 9, color: N.green, letterSpacing: 3 }}>
-        ◈ SYSTEM LOG
-      </div>
-      <div style={{ padding: "8px 12px", overflowY: "auto", height: "calc(100% - 33px)" }}>
-        {log.length === 0 && <div style={{ fontSize: 9, color: N.textDim, letterSpacing: 1 }}>AWAITING AGENT ACTIVITY...</div>}
-        {log.map(entry => (
-          <div key={entry.id} style={{ marginBottom: 6, fontSize: 9, lineHeight: 1.5 }}>
-            <span style={{ color: N.textDim }}>[{entry.time}] </span>
-            <span style={{ color: entry.color }}>AG-{AGENTS_META.find(a => a.id === entry.agentId)?.num} </span>
-            <span style={{ color: N.text }}>{entry.msg}</span>
+    <div style={{ minHeight: "100vh", background: T.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ width: "100%", maxWidth: 420 }}>
+        {/* Logo */}
+        <div style={{ textAlign: "center", marginBottom: 40 }}>
+          <div style={{ width: 52, height: 52, borderRadius: 14, background: T.accentBg, border: `1px solid ${T.accent}33`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, margin: "0 auto 16px" }}>⌘</div>
+          <h1 style={{ fontSize: 26, fontWeight: 700, color: T.text, margin: 0, letterSpacing: -0.5 }}>Agent Empire</h1>
+          <p style={{ fontSize: 14, color: T.text2, marginTop: 6 }}>Your AI content business command center</p>
+        </div>
+
+        {/* Card */}
+        <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 16, padding: 32, boxShadow: T.shadow3 }}>
+          <div style={{ display: "flex", gap: 4, marginBottom: 28, background: T.bg3, borderRadius: 10, padding: 4 }}>
+            {["login", "signup"].map(m => (
+              <button key={m} onClick={() => setMode(m)} style={{
+                flex: 1, padding: "8px", borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 600,
+                border: "none", background: mode === m ? T.bg2 : "transparent",
+                color: mode === m ? T.text : T.text2, boxShadow: mode === m ? T.shadow : "none",
+                transition: "all 0.15s", fontFamily: "inherit",
+              }}>{m === "login" ? "Sign in" : "Create account"}</button>
+            ))}
           </div>
-        ))}
+
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ fontSize: 13, fontWeight: 500, color: T.text2, display: "block", marginBottom: 6 }}>Email</label>
+            <Input value={email} onChange={setEmail} placeholder="you@example.com" T={T} />
+          </div>
+          <div style={{ marginBottom: 24 }}>
+            <label style={{ fontSize: 13, fontWeight: 500, color: T.text2, display: "block", marginBottom: 6 }}>Password</label>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleAuth()}
+              placeholder="••••••••"
+              style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: T.bg, color: T.text, fontSize: 14, outline: "none", fontFamily: "inherit", boxSizing: "border-box" }} />
+          </div>
+
+          {error && <div style={{ marginBottom: 16, padding: "10px 14px", borderRadius: 8, background: T.redBg, color: T.red, fontSize: 13 }}>{error}</div>}
+
+          <Btn onClick={handleAuth} disabled={loading} T={T}>
+            {loading ? "..." : mode === "login" ? "Sign in" : "Create account"}
+          </Btn>
+        </div>
+
+        {/* Dark mode toggle */}
+        <div style={{ textAlign: "center", marginTop: 20 }}>
+          <button onClick={() => setDarkMode(!darkMode)} style={{ background: "none", border: "none", color: T.text2, fontSize: 13, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
+            {darkMode ? "☀️ Light mode" : "🌙 Dark mode"}
+          </button>
+        </div>
       </div>
-    </Panel>
+    </div>
   );
 }
 
 // ─── AGENT PANELS ────────────────────────────────────────────────────────────
 
-function ContentAgent({ onGenerated, config, log }) {
+function ContentAgent({ T, config, log, onGenerated }) {
   const [platform, setPlatform] = useState("tiktok");
   const [type, setType] = useState("hook");
   const [topic, setTopic] = useState(TOPICS[0]);
@@ -459,61 +376,40 @@ function ContentAgent({ onGenerated, config, log }) {
 
   const generate = async () => {
     setLoading(true); setOut("");
-    log("content", `Generating ${type} for ${platform}...`);
+    log("content", `Generating ${type} for ${platform}`);
     const t = custom.trim() || topic;
-    const toneMap = { hype: "energetic and bold", educational: "clear and authoritative", controversial: "provocative and challenging", story: "personal and narrative" };
+    const toneMap = { hype: "energetic and bold", educational: "clear and authoritative", controversial: "provocative", story: "personal and narrative" };
     const typeMap = {
       hook: `Write 3 viral opening hooks (1-2 sentences each, numbered) for ${platform} about "${t}".`,
       script: `Write a complete ${platform} video script about "${t}". Include [HOOK], [BODY], [CTA].`,
-      caption: `Write a ${platform} caption about "${t}" with hook, value, CTA and ${config.hashtagCount || 12} hashtags.`,
+      caption: `Write a ${platform} caption about "${t}" with hook, value, CTA and 12 hashtags.`,
       series: `Write a 3-part content series (POST 1, 2, 3) about "${t}" for ${platform}.`,
     };
-    const niche = config.niche || "AI & Make Money Online";
-    const result = await callClaude(`You are an elite social media content creator for ${niche}. Tone: ${toneMap[tone]}. ${typeMap[type]} Output ONLY the content.`).catch(() => "ERROR. Try again.");
+    const result = await callClaude(`You are an elite social media content creator for ${config.niche || "AI & Make Money Online"}. Tone: ${toneMap[tone]}. ${typeMap[type]} Output ONLY the content.`).catch(() => "Error. Try again.");
     setOut(result);
     onGenerated(result, t, platform);
-    log("content", `Content generated successfully — ${result.length} chars`);
+    log("content", `Content generated — ${result.length} chars`);
     setLoading(false);
   };
 
   return (
     <div>
-      <AgentStatusBar agentId="content" loading={loading} statusText="GENERATING CONTENT STREAM..." />
-      <Panel color={N.green} style={{ padding: 14, marginBottom: 10 }}>
-        <SectionLabel color={N.green}>PLATFORM TARGET</SectionLabel>
-        <CyberSelect options={PLATFORMS} value={platform} onChange={setPlatform} color={N.green} />
-      </Panel>
-      <Panel color={N.green} style={{ padding: 14, marginBottom: 10 }}>
-        <SectionLabel color={N.green}>CONTENT TYPE</SectionLabel>
-        <CyberSelect options={CONTENT_TYPES} value={type} onChange={setType} color={N.green} />
-      </Panel>
-      <Panel color={N.green} style={{ padding: 14, marginBottom: 10 }}>
-        <SectionLabel color={N.green}>TOPIC VECTOR</SectionLabel>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 10 }}>
-          {TOPICS.map(t => (
-            <button key={t} onClick={() => { setTopic(t); setCustom(""); }} style={{
-              padding: "4px 10px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono, fontSize: 9,
-              letterSpacing: 1, border: topic === t && !custom ? `1px solid ${N.green}` : `1px solid ${N.border}`,
-              background: topic === t && !custom ? `${N.green}18` : "transparent",
-              color: topic === t && !custom ? N.green : N.textDim,
-            }}>{t}</button>
-          ))}
-        </div>
-        <CyberInput value={custom} onChange={setCustom} placeholder="> ENTER CUSTOM TOPIC..." />
-      </Panel>
-      <Panel color={N.green} style={{ padding: 14, marginBottom: 14 }}>
-        <SectionLabel color={N.green}>TONE MATRIX</SectionLabel>
-        <CyberSelect options={TONES} value={tone} onChange={setTone} color={N.green} />
-      </Panel>
-      <CyberBtn onClick={generate} disabled={loading} color={N.green}>
-        {loading ? "⚡ AGENT RUNNING..." : "⚡ EXECUTE CONTENT AGENT"}
-      </CyberBtn>
-      <OutputBox text={out} label="CONTENT OUTPUT" color={N.green} />
+      <LoadingBar loading={loading} color="purple" T={T} />
+      <Card T={T}><Label T={T}>Platform</Label><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{PLATFORMS.map(p => <Chip key={p.id} label={`${p.icon} ${p.label}`} active={platform === p.id} onClick={() => setPlatform(p.id)} color="purple" T={T} />)}</div></Card>
+      <Card T={T}><Label T={T}>Content Type</Label><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{CONTENT_TYPES.map(c => <Chip key={c.id} label={c.label} active={type === c.id} onClick={() => setType(c.id)} color="purple" T={T} />)}</div></Card>
+      <Card T={T}>
+        <Label T={T}>Topic</Label>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>{TOPICS.map(t => <Chip key={t} label={t} active={topic === t && !custom} onClick={() => { setTopic(t); setCustom(""); }} color="purple" T={T} />)}</div>
+        <Input value={custom} onChange={setCustom} placeholder="Or type your own topic..." T={T} />
+      </Card>
+      <Card T={T}><Label T={T}>Tone</Label><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{TONES.map(t => <Chip key={t.id} label={t.label} active={tone === t.id} onClick={() => setTone(t.id)} color="purple" T={T} />)}</div></Card>
+      <Btn onClick={generate} disabled={loading} variant="purple" T={T}>{loading ? "Generating..." : "⚡ Generate Content"}</Btn>
+      <OutputBox text={out} label="Content Output" color="purple" T={T} />
     </div>
   );
 }
 
-function PublishingAgent({ incoming, incomingTopic, config, log }) {
+function PublishingAgent({ T, config, log, incoming, incomingTopic }) {
   const [manual, setManual] = useState("");
   const [style, setStyle] = useState("beginner");
   const [platform, setPlatform] = useState("tiktok");
@@ -525,51 +421,37 @@ function PublishingAgent({ incoming, incomingTopic, config, log }) {
   const transform = async () => {
     if (!content.trim()) return;
     setLoading(true); setOut("");
-    log("publishing", `Repurposing content for ${platform} in ${style} style...`);
-    const styleMap = { beginner: "beginner-friendly — simple words, assume viewer knows nothing", advanced: "advanced tactical — skip basics, speak to experienced creators", faceless: "faceless brand — no personal pronouns, anonymous authority", spanish: "fluent natural Spanish for Latin American audience" };
-    const fmtMap = { hook: "3 viral hooks (numbered)", script: "full video script with [HOOK],[BODY],[CTA]", caption: "caption with hook, value, CTA and 10 hashtags", series: "3-part content series" };
-    const result = await callClaude(`Repurpose this content for a second channel.\nORIGINAL:\n${content}\nStyle: ${styleMap[style]}\nFormat: ${fmtMap[format]} for ${platform}\nOutput ONLY the content.`).catch(() => "ERROR.");
+    log("publishing", `Repurposing for ${platform} in ${style} style`);
+    const styleMap = { beginner: "beginner-friendly, simple words", advanced: "advanced tactical, no hand-holding", faceless: "faceless brand, no personal pronouns", spanish: "fluent natural Spanish for Latin America" };
+    const fmtMap = { hook: "3 viral hooks (numbered)", script: "full video script [HOOK],[BODY],[CTA]", caption: "caption with hook, value, CTA and 10 hashtags", series: "3-part series (POST 1, 2, 3)" };
+    const result = await callClaude(`Repurpose this content for a second channel.\nORIGINAL:\n${content}\nStyle: ${styleMap[style]}\nFormat: ${fmtMap[format]} for ${platform}\nOutput ONLY the content.`).catch(() => "Error.");
     setOut(result);
-    log("publishing", `Channel 2 content ready — ${style} style`);
+    log("publishing", `Channel 2 content ready`);
     setLoading(false);
   };
 
   return (
     <div>
-      <AgentStatusBar agentId="publishing" loading={loading} statusText="REPURPOSING CONTENT FOR CHANNEL 2..." />
+      <LoadingBar loading={loading} color="blue" T={T} />
       {incoming ? (
-        <Panel color={N.cyan} style={{ padding: 14, marginBottom: 10 }}>
-          <div style={{ fontSize: 9, color: N.cyan, letterSpacing: 2, marginBottom: 6 }}>✓ AUTO-RECEIVED FROM AGENT 01</div>
-          <div style={{ fontSize: 9, color: N.textDim, letterSpacing: 1, marginBottom: 6 }}>TOPIC: {incomingTopic}</div>
-          <div style={{ fontSize: 11, color: N.text, lineHeight: 1.6 }}>{incoming.slice(0, 200)}{incoming.length > 200 ? "..." : ""}</div>
-        </Panel>
+        <Card T={T} style={{ border: `1px solid ${T.blue}33`, background: T.blueBg }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: T.blue, marginBottom: 6 }}>✓ Auto-received from Content Agent</div>
+          <div style={{ fontSize: 13, color: T.text2 }}>{incomingTopic}</div>
+          <div style={{ fontSize: 13, color: T.text, marginTop: 8, lineHeight: 1.6 }}>{incoming.slice(0, 200)}{incoming.length > 200 ? "..." : ""}</div>
+        </Card>
       ) : (
-        <Panel color={N.cyan} style={{ padding: 14, marginBottom: 10 }}>
-          <SectionLabel color={N.cyan}>MANUAL INPUT</SectionLabel>
-          <CyberInput value={manual} onChange={setManual} placeholder="> PASTE CONTENT FROM AGENT 01..." multiline />
-        </Panel>
+        <Card T={T}><Label T={T}>Paste Content</Label><Input value={manual} onChange={setManual} placeholder="Paste content from the Content Agent..." multiline T={T} /></Card>
       )}
-      <Panel color={N.cyan} style={{ padding: 14, marginBottom: 10 }}>
-        <SectionLabel color={N.cyan}>CHANNEL 2 STYLE</SectionLabel>
-        <CyberSelect options={SECOND_STYLES} value={style} onChange={setStyle} color={N.cyan} />
-      </Panel>
-      <Panel color={N.cyan} style={{ padding: 14, marginBottom: 10 }}>
-        <SectionLabel color={N.cyan}>TARGET PLATFORM</SectionLabel>
-        <CyberSelect options={PLATFORMS} value={platform} onChange={setPlatform} color={N.cyan} />
-      </Panel>
-      <Panel color={N.cyan} style={{ padding: 14, marginBottom: 14 }}>
-        <SectionLabel color={N.cyan}>OUTPUT FORMAT</SectionLabel>
-        <CyberSelect options={CONTENT_TYPES} value={format} onChange={setFormat} color={N.cyan} />
-      </Panel>
-      <CyberBtn onClick={transform} disabled={loading || !content.trim()} color={N.cyan}>
-        {loading ? "◈ AGENT RUNNING..." : "◈ EXECUTE PUBLISHING AGENT"}
-      </CyberBtn>
-      <OutputBox text={out} label="CHANNEL 2 OUTPUT" color={N.cyan} />
+      <Card T={T}><Label T={T}>Channel 2 Style</Label><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{SECOND_STYLES.map(s => <Chip key={s.id} label={s.label} active={style === s.id} onClick={() => setStyle(s.id)} color="blue" T={T} />)}</div></Card>
+      <Card T={T}><Label T={T}>Target Platform</Label><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{PLATFORMS.map(p => <Chip key={p.id} label={`${p.icon} ${p.label}`} active={platform === p.id} onClick={() => setPlatform(p.id)} color="blue" T={T} />)}</div></Card>
+      <Card T={T}><Label T={T}>Output Format</Label><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{CONTENT_TYPES.map(c => <Chip key={c.id} label={c.label} active={format === c.id} onClick={() => setFormat(c.id)} color="blue" T={T} />)}</div></Card>
+      <Btn onClick={transform} disabled={loading || !content.trim()} variant="blue" T={T}>{loading ? "Transforming..." : "◈ Rewrite & Reformat for Channel 2"}</Btn>
+      <OutputBox text={out} label="Channel 2 Output" color="blue" T={T} />
     </div>
   );
 }
 
-function ResearchAgent({ config, log }) {
+function ResearchAgent({ T, config, log }) {
   const [cat, setCat] = useState("trending");
   const [niche, setNiche] = useState(config.niche || "AI & Make Money Online");
   const [loading, setLoading] = useState(false);
@@ -577,41 +459,47 @@ function ResearchAgent({ config, log }) {
 
   const research = async () => {
     setLoading(true); setOut("");
-    log("research", `Running ${cat} research for "${niche}"...`);
-    const depth = config.researchDepth?.includes("15") ? 15 : config.researchDepth?.includes("5") ? 5 : 8;
+    log("research", `Running ${cat} research for "${niche}"`);
     const prompts = {
-      trending: `Generate ${depth} trending content topics in "${niche}" for TikTok & YouTube Shorts 2026. For each: title, why trending, viral hook, engagement potential.`,
-      hooks: `Generate ${depth} proven hook formulas for "${niche}" in 2026. For each: formula, example, psychological trigger.`,
+      trending: `Generate 8 trending content topics in "${niche}" for TikTok & YouTube Shorts 2026. For each: title, why trending, viral hook, engagement potential.`,
+      hooks: `Generate 12 proven hook formulas for "${niche}" in 2026. For each: formula, example, psychological trigger.`,
       competitors: `Analyze winning strategies for top creators in "${niche}" 2026. Give: winning angles, posting patterns, high-engagement topics, content gaps.`,
-      monetization: `Generate ${depth} revenue-optimized content ideas for "${niche}". For each: angle, monetization method, revenue potential, hook.`,
+      monetization: `Generate 8 revenue-optimized content ideas for "${niche}". For each: angle, monetization method, revenue potential, hook.`,
     };
-    const result = await callClaude(prompts[cat]).catch(() => "ERROR.");
+    const result = await callClaude(prompts[cat]).catch(() => "Error.");
     setOut(result);
     await saveToBackend("/api/research/save", { report: result, category: cat });
-    log("research", `Research complete — ${result.length} chars saved to database`);
+    log("research", `Research complete — saved to database`);
     setLoading(false);
   };
 
   return (
     <div>
-      <AgentStatusBar agentId="research" loading={loading} statusText="SCANNING TREND DATABASE..." />
-      <Panel color={N.yellow} style={{ padding: 14, marginBottom: 10 }}>
-        <SectionLabel color={N.yellow}>RESEARCH MODE</SectionLabel>
-        <CyberSelect options={RESEARCH_CATS} value={cat} onChange={setCat} color={N.yellow} />
-      </Panel>
-      <Panel color={N.yellow} style={{ padding: 14, marginBottom: 14 }}>
-        <SectionLabel color={N.yellow}>NICHE TARGET</SectionLabel>
-        <CyberInput value={niche} onChange={setNiche} placeholder="> ENTER NICHE..." />
-      </Panel>
-      <CyberBtn onClick={research} disabled={loading} color={N.yellow}>
-        {loading ? "◎ AGENT RUNNING..." : "◎ EXECUTE RESEARCH AGENT"}
-      </CyberBtn>
-      <OutputBox text={out} label="INTELLIGENCE REPORT" color={N.yellow} />
+      <LoadingBar loading={loading} color="yellow" T={T} />
+      <Card T={T}>
+        <Label T={T}>Research Type</Label>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          {RESEARCH_CATS.map(c => (
+            <button key={c.id} onClick={() => setCat(c.id)} style={{
+              padding: "12px 16px", borderRadius: 10, cursor: "pointer", textAlign: "left",
+              border: `1px solid ${cat === c.id ? T.yellow : T.border}`,
+              background: cat === c.id ? T.yellowBg : T.bg,
+              transition: "all 0.15s",
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: cat === c.id ? T.yellow : T.text }}>{c.label}</div>
+              <div style={{ fontSize: 12, color: T.text2, marginTop: 2 }}>{c.desc}</div>
+            </button>
+          ))}
+        </div>
+      </Card>
+      <Card T={T}><Label T={T}>Niche</Label><Input value={niche} onChange={setNiche} T={T} /></Card>
+      <Btn onClick={research} disabled={loading} variant="warning" T={T}>{loading ? "Researching..." : "◎ Run Research"}</Btn>
+      <OutputBox text={out} label="Research Report" color="yellow" T={T} />
     </div>
   );
 }
 
-function SchedulerAgent({ config, log }) {
+function SchedulerAgent({ T, config, log }) {
   const [niche, setNiche] = useState(config.niche || "AI & Make Money Online");
   const [ch1, setCh1] = useState(["tiktok", "youtube"]);
   const [ch2, setCh2] = useState(["instagram", "twitter"]);
@@ -623,82 +511,64 @@ function SchedulerAgent({ config, log }) {
 
   const generate = async () => {
     setLoading(true); setSchedule(null);
-    log("scheduler", `Building 7-day schedule for ${niche}...`);
-    const tz = config.timezone || "EST";
-    const start = config.startTime || "8:00 AM";
-    const prompt = `Create a 7-day posting schedule for TWO channels in "${niche}".\nChannel 1: ${ch1.join(", ")}\nChannel 2: ${ch2.join(", ")}\nPosts/day: ${ppd}\nTimezone: ${tz}, First post: ${start}\n\nFormat EXACTLY:\nDAY: Monday\nTHEME: [theme]\nCH1: [platform] | [time] | [type] | [topic]\nCH2: [platform] | [time] | [type] | [topic]\n\nOutput ONLY the schedule.`;
+    log("scheduler", `Building 7-day schedule for ${niche}`);
+    const prompt = `Create a 7-day posting schedule for TWO channels in "${niche}".\nChannel 1: ${ch1.join(", ")}\nChannel 2: ${ch2.join(", ")}\nPosts/day: ${ppd}\n\nFormat EXACTLY:\nDAY: Monday\nTHEME: [theme]\nCH1: [platform] | [time] | [type] | [topic]\nCH2: [platform] | [time] | [type] | [topic]\n\nOutput ONLY the schedule.`;
     const raw = await callClaude(prompt).catch(() => null);
     if (!raw) { setLoading(false); return; }
     const days = raw.split(/DAY:/i).filter(b => b.trim()).map(block => {
       const lines = block.trim().split("\n").map(l => l.trim()).filter(Boolean);
-      return {
-        day: lines[0]?.trim(),
-        theme: lines.find(l => l.startsWith("THEME:"))?.replace("THEME:", "").trim() || "",
-        ch1Posts: lines.filter(l => l.startsWith("CH1:")).map(l => l.replace("CH1:", "").trim()),
-        ch2Posts: lines.filter(l => l.startsWith("CH2:")).map(l => l.replace("CH2:", "").trim()),
-      };
+      return { day: lines[0]?.trim(), theme: lines.find(l => l.startsWith("THEME:"))?.replace("THEME:", "").trim() || "", ch1Posts: lines.filter(l => l.startsWith("CH1:")).map(l => l.replace("CH1:", "").trim()), ch2Posts: lines.filter(l => l.startsWith("CH2:")).map(l => l.replace("CH2:", "").trim()) };
     }).filter(d => d.day);
     setSchedule(days);
     await saveToBackend("/api/scheduler/save", { schedule: days });
-    log("scheduler", `7-day schedule generated and saved — ${days.length} days`);
+    log("scheduler", `7-day schedule generated`);
     setLoading(false);
   };
 
   const raw = schedule ? schedule.map(d => `${d.day} — ${d.theme}\n${d.ch1Posts.map(p => `CH1: ${p}`).join("\n")}\n${d.ch2Posts.map(p => `CH2: ${p}`).join("\n")}`).join("\n\n") : "";
 
-  const plColors = { tiktok: N.green, youtube: N.red, instagram: N.purple, twitter: N.cyan };
-
   return (
     <div>
-      <AgentStatusBar agentId="scheduler" loading={loading} statusText="COMPUTING OPTIMAL POST SCHEDULE..." />
-      <Panel color={N.purple} style={{ padding: 14, marginBottom: 10 }}>
-        <SectionLabel color={N.purple}>NICHE</SectionLabel>
-        <CyberInput value={niche} onChange={setNiche} />
-      </Panel>
-      <Panel color={N.purple} style={{ padding: 14, marginBottom: 10 }}>
-        <SectionLabel color={N.purple}>CHANNEL 1 PLATFORMS</SectionLabel>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {PLATFORMS.map(p => <button key={p.id} onClick={() => toggle(ch1, setCh1, p.id)} style={{ padding: "6px 12px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono, fontSize: 10, letterSpacing: 1, border: ch1.includes(p.id) ? `1px solid ${N.purple}` : `1px solid ${N.border}`, background: ch1.includes(p.id) ? `${N.purple}18` : "transparent", color: ch1.includes(p.id) ? N.purple : N.textDim }}>{p.icon} {p.label}</button>)}
-        </div>
-      </Panel>
-      <Panel color={N.purple} style={{ padding: 14, marginBottom: 10 }}>
-        <SectionLabel color={N.purple}>CHANNEL 2 PLATFORMS</SectionLabel>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {PLATFORMS.map(p => <button key={p.id} onClick={() => toggle(ch2, setCh2, p.id)} style={{ padding: "6px 12px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono, fontSize: 10, letterSpacing: 1, border: ch2.includes(p.id) ? `1px solid ${N.purple}` : `1px solid ${N.border}`, background: ch2.includes(p.id) ? `${N.purple}18` : "transparent", color: ch2.includes(p.id) ? N.purple : N.textDim }}>{p.icon} {p.label}</button>)}
-        </div>
-      </Panel>
-      <Panel color={N.purple} style={{ padding: 14, marginBottom: 14 }}>
-        <SectionLabel color={N.purple}>POSTS PER DAY</SectionLabel>
-        <div style={{ display: "flex", gap: 6 }}>
-          {["2","3","4","5"].map(n => <button key={n} onClick={() => setPpd(n)} style={{ flex: 1, padding: "8px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono, fontSize: 11, letterSpacing: 2, border: ppd === n ? `1px solid ${N.purple}` : `1px solid ${N.border}`, background: ppd === n ? `${N.purple}18` : "transparent", color: ppd === n ? N.purple : N.textDim }}>{n}×</button>)}
-        </div>
-      </Panel>
-      <CyberBtn onClick={generate} disabled={loading} color={N.purple}>
-        {loading ? "◷ AGENT RUNNING..." : "◷ EXECUTE SCHEDULER AGENT"}
-      </CyberBtn>
+      <LoadingBar loading={loading} color="green" T={T} />
+      <Card T={T}><Label T={T}>Niche</Label><Input value={niche} onChange={setNiche} T={T} /></Card>
+      <Card T={T}>
+        <Label T={T}>Channel 1 Platforms</Label>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{PLATFORMS.map(p => <Chip key={p.id} label={`${p.icon} ${p.label}`} active={ch1.includes(p.id)} onClick={() => toggle(ch1, setCh1, p.id)} color="green" T={T} />)}</div>
+      </Card>
+      <Card T={T}>
+        <Label T={T}>Channel 2 Platforms</Label>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{PLATFORMS.map(p => <Chip key={p.id} label={`${p.icon} ${p.label}`} active={ch2.includes(p.id)} onClick={() => toggle(ch2, setCh2, p.id)} color="green" T={T} />)}</div>
+      </Card>
+      <Card T={T}>
+        <Label T={T}>Posts Per Day</Label>
+        <div style={{ display: "flex", gap: 8 }}>{["2","3","4","5"].map(n => <Chip key={n} label={`${n}×`} active={ppd === n} onClick={() => setPpd(n)} color="green" T={T} />)}</div>
+      </Card>
+      <Btn onClick={generate} disabled={loading} variant="success" T={T}>{loading ? "Building schedule..." : "📅 Generate 7-Day Schedule"}</Btn>
       {schedule && (
-        <Panel color={N.purple} style={{ marginTop: 16, padding: 0 }}>
-          <div style={{ padding: "8px 12px", borderBottom: `1px solid ${N.purple}22`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 9, color: N.purple, letterSpacing: 3 }}>◈ 7-DAY SCHEDULE</span>
-            <button onClick={() => copy(raw)} style={{ fontSize: 9, color: copied ? N.green : N.textDim, background: "none", border: `1px solid ${copied ? N.green : N.border}`, padding: "3px 8px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono, letterSpacing: 1 }}>{copied ? "✓ COPIED" : "COPY ALL"}</button>
+        <div style={{ marginTop: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>Your Week</span>
+            <button onClick={() => copy(raw)} style={{ fontSize: 12, color: copied ? T.green : T.text2, background: "none", border: `1px solid ${T.border2}`, padding: "4px 12px", borderRadius: 6, cursor: "pointer" }}>{copied ? "✓ Copied" : "Copy All"}</button>
           </div>
-          {schedule.map((d, i) => (
-            <div key={i} style={{ padding: "12px 14px", borderBottom: i < schedule.length - 1 ? `1px solid ${N.border}` : "none" }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 6 }}>
-                <span style={{ fontSize: 11, color: N.purple, fontWeight: 700, letterSpacing: 2 }}>{d.day?.toUpperCase()}</span>
-                <span style={{ fontSize: 9, color: N.textDim }}>// {d.theme}</span>
+          <div style={{ borderRadius: 10, border: `1px solid ${T.border}`, overflow: "hidden" }}>
+            {schedule.map((d, i) => (
+              <div key={i} style={{ padding: "14px 16px", borderBottom: i < schedule.length - 1 ? `1px solid ${T.border}` : "none", background: i % 2 === 0 ? T.bg2 : T.bg }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 6 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{d.day}</span>
+                  <span style={{ fontSize: 12, color: T.text2 }}>{d.theme}</span>
+                </div>
+                {d.ch1Posts.map((p, j) => <div key={j} style={{ fontSize: 12, color: T.text2, marginBottom: 2 }}><Badge color="green" T={T}>CH1</Badge> {p}</div>)}
+                {d.ch2Posts.map((p, j) => <div key={j} style={{ fontSize: 12, color: T.text2, marginBottom: 2, marginTop: 2 }}><Badge color="blue" T={T}>CH2</Badge> {p}</div>)}
               </div>
-              {d.ch1Posts.map((p, j) => { const parts = p.split("|").map(x => x.trim()); const plId = parts[0]?.toLowerCase().replace(" ", ""); return <div key={j} style={{ fontSize: 9, marginBottom: 3, color: N.textDim }}><span style={{ color: plColors[plId] || N.green }}>CH1 </span>{parts.join(" · ")}</div>; })}
-              {d.ch2Posts.map((p, j) => { const parts = p.split("|").map(x => x.trim()); const plId = parts[0]?.toLowerCase().replace(" ", ""); return <div key={j} style={{ fontSize: 9, marginBottom: 3, color: N.textDim }}><span style={{ color: (plColors[plId] || N.cyan) + "aa" }}>CH2 </span>{parts.join(" · ")}</div>; })}
-            </div>
-          ))}
-        </Panel>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
 }
 
-function RevenueAgent({ config, log }) {
+function RevenueAgent({ T, config, log }) {
   const [rev, setRev] = useState({ paypal: "", tiktok: "", meta: "", google: "", youtube: "", affiliate: "", ugc: "" });
   const [spend, setSpend] = useState({ tiktok: "", meta: "", google: "", youtube: "" });
   const [goal, setGoal] = useState("scale");
@@ -709,254 +579,68 @@ function RevenueAgent({ config, log }) {
   const totalSpend = Object.values(spend).reduce((s, v) => s + (parseFloat(v) || 0), 0);
   const net = totalRev - totalSpend;
   const roas = totalSpend > 0 ? (totalRev / totalSpend).toFixed(2) : "—";
-  const cur = config.currency || "USD";
 
   const analyze = async () => {
     setLoading(true); setOut("");
-    log("revenue", `Running revenue analysis — Total: $${totalRev.toFixed(0)}, Spend: $${totalSpend.toFixed(0)}...`);
+    log("revenue", `Analyzing revenue — $${totalRev.toFixed(0)} total`);
     const goalMap = { scale: "scale aggressively", optimize: "optimize ROAS", diversify: "diversify streams", conserve: "grow organically" };
-    const result = await callClaude(`Revenue agent analysis.\nREVENUE: PayPal $${rev.paypal||0}, TikTok $${rev.tiktok||0}, Meta $${rev.meta||0}, Google $${rev.google||0}, YouTube $${rev.youtube||0}, Affiliate $${rev.affiliate||0}, UGC $${rev.ugc||0}. TOTAL: $${totalRev.toFixed(2)}\nAD SPEND: TikTok $${spend.tiktok||0}, Meta $${spend.meta||0}, Google $${spend.google||0}, YouTube $${spend.youtube||0}. TOTAL: $${totalSpend.toFixed(2)}\nNET: $${net.toFixed(2)} | ROAS: ${roas}x | GOAL: ${goalMap[goal]} | CURRENCY: ${cur}\nGive: 1)PROFIT ANALYSIS 2)AD STRATEGY with specific moves 3)REVENUE GAPS 4)30-DAY ACTION PLAN 5)PAYPAL SETUP TIP`).catch(() => "ERROR.");
+    const result = await callClaude(`Revenue analysis for AI content business.\nREVENUE: PayPal $${rev.paypal||0}, TikTok $${rev.tiktok||0}, Meta $${rev.meta||0}, Google $${rev.google||0}, YouTube $${rev.youtube||0}, Affiliate $${rev.affiliate||0}, UGC $${rev.ugc||0}. TOTAL: $${totalRev.toFixed(2)}\nAD SPEND: TikTok $${spend.tiktok||0}, Meta $${spend.meta||0}, Google $${spend.google||0}, YouTube $${spend.youtube||0}. TOTAL: $${totalSpend.toFixed(2)}\nNET: $${net.toFixed(2)} | ROAS: ${roas}x | GOAL: ${goalMap[goal]}\nGive: 1)PROFIT ANALYSIS 2)AD STRATEGY 3)REVENUE GAPS 4)30-DAY PLAN 5)PAYPAL TIP`).catch(() => "Error.");
     setOut(result);
     await saveToBackend("/api/revenue/save", { revenue: rev, adSpend: spend });
-    log("revenue", `Analysis complete — Net profit: ${cur} ${net.toFixed(0)}`);
+    log("revenue", `Analysis complete — net: $${net.toFixed(0)}`);
     setLoading(false);
   };
 
   const StatBox = ({ label, value, color }) => (
-    <Panel color={color} style={{ padding: "12px 14px", flex: 1 }}>
-      <div style={{ fontSize: 8, color: N.textDim, letterSpacing: 2 }}>{label}</div>
-      <div style={{ fontSize: 20, color, fontWeight: 700, letterSpacing: -1, marginTop: 4 }}>{value}</div>
-    </Panel>
+    <div style={{ flex: 1, padding: "16px", borderRadius: 10, background: T[color + "Bg"] || T.bg2, border: `1px solid ${T[color] || T.border}22` }}>
+      <div style={{ fontSize: 11, color: T.text2, marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 700, color: T[color] || T.text }}>{value}</div>
+    </div>
   );
 
   return (
     <div>
-      <AgentStatusBar agentId="revenue" loading={loading} statusText="PROCESSING FINANCIAL DATA..." />
-      <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-        <StatBox label="REVENUE" value={`$${totalRev.toFixed(0)}`} color={N.green} />
-        <StatBox label="AD SPEND" value={`$${totalSpend.toFixed(0)}`} color={N.red} />
-        <StatBox label="NET PROFIT" value={`$${net.toFixed(0)}`} color={net >= 0 ? N.cyan : N.yellow} />
-        <StatBox label="ROAS" value={`${roas}x`} color={N.purple} />
+      <LoadingBar loading={loading} color="red" T={T} />
+      <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+        <StatBox label="Revenue" value={`$${totalRev.toFixed(0)}`} color="green" />
+        <StatBox label="Ad Spend" value={`$${totalSpend.toFixed(0)}`} color="red" />
+        <StatBox label="Net Profit" value={`$${net.toFixed(0)}`} color={net >= 0 ? "blue" : "yellow"} />
+        <StatBox label="ROAS" value={`${roas}x`} color="purple" />
       </div>
-      <Panel color={N.red} style={{ padding: 14, marginBottom: 10 }}>
-        <SectionLabel color={N.red}>REVENUE STREAMS ({cur})</SectionLabel>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-          {[["paypal","PAYPAL"],["tiktok","TIKTOK"],["meta","META"],["google","GOOGLE"],["youtube","YOUTUBE"],["affiliate","AFFILIATE"],["ugc","UGC DEALS"]].map(([k,l]) => (
-            <div key={k}>
-              <div style={{ fontSize: 9, color: N.textDim, letterSpacing: 1, marginBottom: 4 }}>{l}</div>
-              <input type="number" placeholder="0.00" value={rev[k]} onChange={e => upd(setRev, k, e.target.value)} style={{ width: "100%", background: N.dark, border: `1px solid ${N.border}`, color: N.text, fontFamily: N.mono, fontSize: 12, padding: "8px 10px", borderRadius: 2, outline: "none" }} />
-            </div>
+      <Card T={T}>
+        <Label T={T}>Monthly Revenue ($)</Label>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          {[["paypal","💳 PayPal"],["tiktok","🎵 TikTok"],["meta","📘 Meta"],["google","🔍 Google"],["youtube","▶️ YouTube"],["affiliate","🔗 Affiliate"],["ugc","🎬 UGC"]].map(([k,l]) => (
+            <div key={k}><div style={{ fontSize: 12, color: T.text2, marginBottom: 5 }}>{l}</div><input type="number" placeholder="0.00" value={rev[k]} onChange={e => upd(setRev, k, e.target.value)} style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: `1px solid ${T.border2}`, background: T.bg, color: T.text, fontSize: 13, outline: "none", fontFamily: "inherit" }} /></div>
           ))}
         </div>
-      </Panel>
-      <Panel color={N.red} style={{ padding: 14, marginBottom: 10 }}>
-        <SectionLabel color={N.red}>AD SPEND ({cur})</SectionLabel>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+      </Card>
+      <Card T={T}>
+        <Label T={T}>Monthly Ad Spend ($)</Label>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           {AD_PLATFORMS.map(p => (
-            <div key={p.id}>
-              <div style={{ fontSize: 9, color: N.textDim, letterSpacing: 1, marginBottom: 4 }}>{p.label}</div>
-              <input type="number" placeholder="0.00" value={spend[p.id]} onChange={e => upd(setSpend, p.id, e.target.value)} style={{ width: "100%", background: N.dark, border: `1px solid ${N.border}`, color: N.text, fontFamily: N.mono, fontSize: 12, padding: "8px 10px", borderRadius: 2, outline: "none" }} />
-            </div>
+            <div key={p.id}><div style={{ fontSize: 12, color: T.text2, marginBottom: 5 }}>{p.label}</div><input type="number" placeholder="0.00" value={spend[p.id]} onChange={e => upd(setSpend, p.id, e.target.value)} style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: `1px solid ${T.border2}`, background: T.bg, color: T.text, fontSize: 13, outline: "none", fontFamily: "inherit" }} /></div>
           ))}
         </div>
-      </Panel>
-      <Panel color={N.red} style={{ padding: 14, marginBottom: 14 }}>
-        <SectionLabel color={N.red}>OBJECTIVE</SectionLabel>
-        <CyberSelect value={goal} onChange={setGoal} color={N.red}
-          options={[{ id: "scale", label: "SCALE REVENUE" }, { id: "optimize", label: "OPTIMIZE ROAS" }, { id: "diversify", label: "DIVERSIFY" }, { id: "conserve", label: "ORGANIC GROWTH" }]} />
-      </Panel>
-      <CyberBtn onClick={analyze} disabled={loading} color={N.red}>
-        {loading ? "◆ AGENT RUNNING..." : "◆ EXECUTE REVENUE AGENT"}
-      </CyberBtn>
-      <OutputBox text={out} label="FINANCIAL INTELLIGENCE" color={N.red} />
+      </Card>
+      <Card T={T}>
+        <Label T={T}>Goal</Label>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {[["scale","🚀 Scale Revenue"],["optimize","🎯 Optimize ROAS"],["diversify","🌐 Diversify"],["conserve","🛡 Organic Growth"]].map(([id,lbl]) => <Chip key={id} label={lbl} active={goal === id} onClick={() => setGoal(id)} color="red" T={T} />)}
+        </div>
+      </Card>
+      <Btn onClick={analyze} disabled={loading} variant="danger" T={T}>{loading ? "Analyzing..." : "💰 Run Revenue Analysis"}</Btn>
+      <OutputBox text={out} label="Revenue Report" color="red" T={T} />
     </div>
   );
 }
 
-// ─── MAIN ────────────────────────────────────────────────────────────────────
-export default function AgentEmpire() {
-  const [active, setActive] = useState("content");
-  const [genContent, setGenContent] = useState("");
-  const [genTopic, setGenTopic] = useState("");
-  const [configOpen, setConfigOpen] = useState(false);
-  const [config, setConfig] = useState({ niche: "AI & Make Money Online", brandVoice: "hype", hashtagCount: 12, timezone: "EST" });
-  const [backendStatus, setBackendStatus] = useState("checking");
-  const [activityLog, pushLog] = useActivityLog();
-  const [showLog, setShowLog] = useState(false);
-
-  useEffect(() => {
-    const styleEl = document.createElement("style");
-    styleEl.textContent = globalCSS;
-    document.head.appendChild(styleEl);
-    return () => document.head.removeChild(styleEl);
-  }, []);
-
-  useEffect(() => {
-    fetch(BACKEND).then(r => r.json()).then(() => setBackendStatus("online")).catch(() => setBackendStatus("offline"));
-  }, []);
-
-  const handleGenerated = useCallback((content, topic) => {
-    setGenContent(content);
-    setGenTopic(topic);
-  }, []);
-
-  const meta = AGENTS_META.find(a => a.id === active);
-
-  return (
-    <div className="flicker" style={{ minHeight: "100vh", background: N.black, position: "relative", overflow: "hidden" }}>
-      {/* Scanline overlay */}
-      <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, pointerEvents: "none", zIndex: 0,
-        background: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,255,136,0.015) 2px, rgba(0,255,136,0.015) 4px)" }} />
-
-      {/* Grid background */}
-      <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, pointerEvents: "none", zIndex: 0,
-        backgroundImage: `linear-gradient(${N.green}08 1px, transparent 1px), linear-gradient(90deg, ${N.green}08 1px, transparent 1px)`,
-        backgroundSize: "40px 40px" }} />
-
-      <div style={{ position: "relative", zIndex: 1, maxWidth: 900, margin: "0 auto", padding: "16px" }}>
-
-        {/* TOP MENUBAR */}
-        <Panel color={N.green} style={{ padding: "10px 16px", marginBottom: 12, display: "flex", alignItems: "center", gap: 16 }}>
-          {/* Logo */}
-          <div className="glow-text" style={{ fontSize: 14, color: N.green, letterSpacing: 4, fontWeight: 700, whiteSpace: "nowrap" }}>
-            ◈ AGENT EMPIRE
-          </div>
-          <div style={{ width: 1, height: 20, background: N.border }} />
-
-          {/* Agent tabs in menubar */}
-          <div style={{ display: "flex", gap: 4, flex: 1, overflowX: "auto" }}>
-            {AGENTS_META.map(a => (
-              <button key={a.id} onClick={() => setActive(a.id)} style={{
-                padding: "5px 12px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono,
-                fontSize: 10, letterSpacing: 1.5, fontWeight: 700, whiteSpace: "nowrap",
-                border: active === a.id ? `1px solid ${a.color}` : `1px solid transparent`,
-                background: active === a.id ? `${a.color}15` : "transparent",
-                color: active === a.id ? a.color : N.textDim,
-                boxShadow: active === a.id ? `0 0 8px ${a.color}33` : "none",
-                transition: "all 0.15s",
-              }}>
-                {a.icon} {a.num}:{a.label}
-                {a.id === "publishing" && genContent && active !== "publishing" && (
-                  <span style={{ marginLeft: 6, background: N.cyan, color: N.black, borderRadius: 2, padding: "1px 4px", fontSize: 8 }}>NEW</span>
-                )}
-              </button>
-            ))}
-          </div>
-
-          <div style={{ width: 1, height: 20, background: N.border }} />
-
-          {/* Right side controls */}
-          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-            {/* Backend status */}
-            <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, letterSpacing: 1,
-              color: backendStatus === "online" ? N.green : backendStatus === "offline" ? N.red : N.yellow }}>
-              <div className={backendStatus === "online" ? "blink" : ""} style={{ width: 6, height: 6, borderRadius: "50%", background: backendStatus === "online" ? N.green : backendStatus === "offline" ? N.red : N.yellow }} />
-              {backendStatus === "online" ? "ONLINE" : backendStatus === "offline" ? "OFFLINE" : "..."}
-            </div>
-
-            {/* Log toggle */}
-            <button onClick={() => setShowLog(s => !s)} style={{
-              padding: "5px 10px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono, fontSize: 9,
-              letterSpacing: 1, border: `1px solid ${showLog ? N.cyan : N.border}`,
-              background: showLog ? `${N.cyan}15` : "transparent", color: showLog ? N.cyan : N.textDim,
-            }}>LOG</button>
-
-            {/* Config button */}
-            <button onClick={() => setConfigOpen(o => !o)} style={{
-              padding: "5px 10px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono, fontSize: 9,
-              letterSpacing: 1, border: `1px solid ${configOpen ? meta?.color : N.border}`,
-              background: configOpen ? `${meta?.color}15` : "transparent", color: configOpen ? meta?.color : N.textDim,
-            }}>⚙ CONFIG</button>
-          </div>
-        </Panel>
-
-        {/* PIPELINE BAR */}
-        <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 12, overflowX: "auto" }}>
-          {AGENTS_META.map((a, i) => (
-            <div key={a.id} style={{ display: "flex", alignItems: "center", flex: 1 }}>
-              <div onClick={() => setActive(a.id)} style={{
-                flex: 1, padding: "6px 10px", cursor: "pointer", textAlign: "center",
-                background: active === a.id ? `${a.color}15` : N.panel,
-                border: `1px solid ${active === a.id ? a.color : N.border}`,
-                borderRight: i < AGENTS_META.length - 1 ? "none" : undefined,
-                transition: "all 0.15s",
-              }}>
-                <div style={{ fontSize: 9, color: active === a.id ? a.color : N.textDim, letterSpacing: 2 }}>{a.icon} {a.label}</div>
-              </div>
-              {i < AGENTS_META.length - 1 && <div style={{ fontSize: 10, color: N.border, padding: "0 4px" }}>→</div>}
-            </div>
-          ))}
-          <div style={{ fontSize: 10, color: N.border, padding: "0 6px" }}>→</div>
-          <div style={{ padding: "6px 12px", border: `1px solid ${N.border}`, background: N.panel }}>
-            <div style={{ fontSize: 9, color: N.textDim, letterSpacing: 2 }}>📱 LIVE</div>
-          </div>
-        </div>
-
-        {/* MAIN CONTENT + LOG */}
-        <div style={{ display: "grid", gridTemplateColumns: showLog ? "1fr 260px" : "1fr", gap: 12 }}>
-          {/* Agent panel */}
-          <div>
-            {/* Agent header */}
-            <Panel color={meta?.color} style={{ padding: "10px 14px", marginBottom: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ fontSize: 18, color: meta?.color }}>{meta?.icon}</span>
-                <div>
-                  <div style={{ fontSize: 9, color: N.textDim, letterSpacing: 3 }}>AGENT {meta?.num}</div>
-                  <div style={{ fontSize: 14, color: meta?.color, letterSpacing: 3, fontWeight: 700 }}>{meta?.label} MODULE</div>
-                </div>
-                <div style={{ marginLeft: "auto", fontSize: 9, color: N.textDim, letterSpacing: 1 }}>
-                  NICHE: <span style={{ color: meta?.color }}>{config.niche}</span>
-                </div>
-              </div>
-            </Panel>
-
-            {active === "content"    && <ContentAgent onGenerated={handleGenerated} config={config} log={pushLog} />}
-            {active === "publishing" && <PublishingAgent incoming={genContent} incomingTopic={genTopic} config={config} log={pushLog} />}
-            {active === "research"   && <ResearchAgent config={config} log={pushLog} />}
-            {active === "scheduler"  && <SchedulerAgent config={config} log={pushLog} />}
-            {active === "revenue"    && <RevenueAgent config={config} log={pushLog} />}
-            {active === "etsy"       && <EtsyAgent config={config} log={pushLog} />}
-            {active === "fiverr"     && <FiverrAgent config={config} log={pushLog} />}
-            {active === "cmd"       && <CommandAgent config={config} log={pushLog} allAgents={AGENTS_META} />}
-          </div>
-
-          {/* Activity log sidebar */}
-          {showLog && (
-            <div style={{ height: "calc(100vh - 160px)", position: "sticky", top: 16 }}>
-              <ActivityLog log={activityLog} />
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div style={{ textAlign: "center", marginTop: 24, fontSize: 9, color: N.textDim, letterSpacing: 3 }}>
-          AGENT EMPIRE v3.0 · 8 AGENTS ONLINE · RUNNING 24/7 ON RAILWAY
-        </div>
-      </div>
-
-      {/* Config drawer */}
-      <ConfigDrawer open={configOpen} onClose={() => setConfigOpen(false)} config={config} setConfig={setConfig} activeAgent={active} />
-    </div>
-  );
-}
-
-// ─── AGENT 6: ETSY ───────────────────────────────────────────────────────────
-function EtsyAgent({ config, log }) {
+function EtsyAgent({ T, config, log }) {
   const ETSY_PRODUCTS = [
-    { id: "prompts", label: "AI PROMPT PACK" },
-    { id: "templates", label: "CONTENT TEMPLATES" },
-    { id: "calendar", label: "CONTENT CALENDAR" },
-    { id: "guide", label: "MONETIZATION GUIDE" },
-    { id: "scripts", label: "VIDEO SCRIPT PACK" },
-    { id: "bundle", label: "FULL BUNDLE" },
+    { id: "prompts", label: "AI Prompt Pack" }, { id: "templates", label: "Content Templates" },
+    { id: "calendar", label: "Content Calendar" }, { id: "guide", label: "Monetization Guide" },
+    { id: "scripts", label: "Video Script Pack" }, { id: "bundle", label: "Full Bundle" },
   ];
-  const PRICE_RANGES = [
-    { id: "budget", label: "$5 - $15" },
-    { id: "mid", label: "$15 - $35" },
-    { id: "premium", label: "$35 - $75" },
-    { id: "high", label: "$75+" },
-  ];
-
   const [productType, setProductType] = useState("prompts");
   const [priceRange, setPriceRange] = useState("mid");
   const [niche, setNiche] = useState(config.niche || "AI & Make Money Online");
@@ -965,113 +649,34 @@ function EtsyAgent({ config, log }) {
 
   const generate = async () => {
     setLoading(true); setOut("");
-    log("etsy", `Generating Etsy listing for ${productType} in ${niche}...`);
+    log("etsy", `Generating Etsy listing for ${productType}`);
     const priceMap = { budget: "$5-$15", mid: "$15-$35", premium: "$35-$75", high: "$75-$150" };
-    const productMap = {
-      prompts: "AI prompt pack (50-100 prompts)",
-      templates: "social media content templates pack",
-      calendar: "30-day content calendar with daily post ideas",
-      guide: "step-by-step monetization guide PDF",
-      scripts: "viral video script pack (20 scripts)",
-      bundle: "complete digital bundle with prompts, templates, calendar and guide",
-    };
-    const prompt = `You are an Etsy SEO and digital product expert. Create a complete Etsy listing for a ${productMap[productType]} in the "${niche}" niche priced at ${priceMap[priceRange]}.
-
-Generate EXACTLY in this format:
-
-TITLE: [SEO-optimized title, max 140 chars, include keywords buyers search for]
-
-PRICE: [Specific price in range with reasoning]
-
-DESCRIPTION:
-[5-paragraph description: hook, what's included, who it's for, what results they get, call to action. Use line breaks. 300-400 words.]
-
-TAGS: [13 comma-separated Etsy tags, single words or short phrases, high search volume]
-
-WHAT TO INCLUDE IN THE DIGITAL FILE:
-[Bullet list of exactly what content to create and put in the downloadable file]
-
-UPSELL IDEAS:
-[3 related products to create next for this shop]`;
-
-    const result = await callClaude(prompt).catch(() => "ERROR. Try again.");
+    const productMap = { prompts: "AI prompt pack (50-100 prompts)", templates: "social media content templates", calendar: "30-day content calendar", guide: "step-by-step monetization guide PDF", scripts: "viral video script pack (20 scripts)", bundle: "complete digital bundle" };
+    const result = await callClaude(`Create a complete Etsy listing for a ${productMap[productType]} in "${niche}" priced at ${priceMap[priceRange]}.\n\nFormat:\nTITLE: [SEO title, max 140 chars]\nPRICE: [specific price + reasoning]\nDESCRIPTION:\n[5 paragraphs: hook, what's included, who it's for, results, CTA]\nTAGS: [13 comma-separated tags]\nWHAT TO INCLUDE IN FILE:\n[bullet list of content to create]\nUPSELL IDEAS:\n[3 related products to create next]`).catch(() => "Error.");
     setOut(result);
-    log("etsy", `Etsy listing generated — ready to publish`);
+    log("etsy", `Etsy listing generated`);
     setLoading(false);
   };
 
   return (
     <div>
-      <AgentStatusBar agentId="etsy" loading={loading} statusText="GENERATING ETSY PRODUCT LISTING..." />
-      <Panel color="#ff6b35" style={{ padding: 14, marginBottom: 10 }}>
-        <SectionLabel color="#ff6b35">PRODUCT TYPE</SectionLabel>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {ETSY_PRODUCTS.map(p => (
-            <button key={p.id} onClick={() => setProductType(p.id)} style={{
-              padding: "6px 12px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono,
-              fontSize: 10, letterSpacing: 1.5, fontWeight: 700,
-              border: productType === p.id ? "1px solid #ff6b35" : `1px solid ${N.border}`,
-              background: productType === p.id ? "#ff6b3518" : "transparent",
-              color: productType === p.id ? "#ff6b35" : N.textDim,
-              boxShadow: productType === p.id ? "0 0 6px #ff6b3544" : "none",
-            }}>{p.label}</button>
-          ))}
-        </div>
-      </Panel>
-      <Panel color="#ff6b35" style={{ padding: 14, marginBottom: 10 }}>
-        <SectionLabel color="#ff6b35">PRICE RANGE</SectionLabel>
-        <div style={{ display: "flex", gap: 6 }}>
-          {PRICE_RANGES.map(p => (
-            <button key={p.id} onClick={() => setPriceRange(p.id)} style={{
-              flex: 1, padding: "8px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono,
-              fontSize: 10, letterSpacing: 1, border: priceRange === p.id ? "1px solid #ff6b35" : `1px solid ${N.border}`,
-              background: priceRange === p.id ? "#ff6b3518" : "transparent",
-              color: priceRange === p.id ? "#ff6b35" : N.textDim,
-            }}>{p.label}</button>
-          ))}
-        </div>
-      </Panel>
-      <Panel color="#ff6b35" style={{ padding: 14, marginBottom: 14 }}>
-        <SectionLabel color="#ff6b35">NICHE</SectionLabel>
-        <CyberInput value={niche} onChange={setNiche} placeholder="> ENTER NICHE..." />
-      </Panel>
-      <CyberBtn onClick={generate} disabled={loading} color="#ff6b35">
-        {loading ? "🛍 AGENT RUNNING..." : "🛍 GENERATE ETSY LISTING"}
-      </CyberBtn>
-      <OutputBox text={out} label="ETSY LISTING OUTPUT" color="#ff6b35" />
-      {out && (
-        <Panel color="#ff6b35" style={{ padding: 14, marginTop: 10 }}>
-          <div style={{ fontSize: 9, color: "#ff6b35", letterSpacing: 2, marginBottom: 8 }}>◈ NEXT STEPS</div>
-          <div style={{ fontSize: 11, color: N.textDim, lineHeight: 1.8 }}>
-            1. Copy the title, description and tags above<br />
-            2. Go to <span style={{ color: "#ff6b35" }}>etsy.com/sell</span> → Add Listing<br />
-            3. Create the digital file (PDF/Notion/Google Doc)<br />
-            4. Upload and publish — your shop goes live in minutes<br />
-            5. Wait for Etsy bank verification (3-5 days) to receive payments
-          </div>
-        </Panel>
-      )}
+      <LoadingBar loading={loading} color="orange" T={T} />
+      <Card T={T}><Label T={T}>Product Type</Label><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{ETSY_PRODUCTS.map(p => <Chip key={p.id} label={p.label} active={productType === p.id} onClick={() => setProductType(p.id)} color="orange" T={T} />)}</div></Card>
+      <Card T={T}><Label T={T}>Price Range</Label><div style={{ display: "flex", gap: 8 }}>{[["budget","$5-$15"],["mid","$15-$35"],["premium","$35-$75"],["high","$75+"]].map(([id,lbl]) => <Chip key={id} label={lbl} active={priceRange === id} onClick={() => setPriceRange(id)} color="orange" T={T} />)}</div></Card>
+      <Card T={T}><Label T={T}>Niche</Label><Input value={niche} onChange={setNiche} T={T} /></Card>
+      <Btn onClick={generate} disabled={loading} variant="orange" T={T}>{loading ? "Generating listing..." : "🛍 Generate Etsy Listing"}</Btn>
+      <OutputBox text={out} label="Etsy Listing" color="orange" T={T} />
     </div>
   );
 }
 
-// ─── AGENT 7: FIVERR ─────────────────────────────────────────────────────────
-function FiverrAgent({ config, log }) {
+function FiverrAgent({ T, config, log }) {
   const GIG_TYPES = [
-    { id: "content", label: "CONTENT CREATION" },
-    { id: "scripts", label: "VIDEO SCRIPTS" },
-    { id: "strategy", label: "CONTENT STRATEGY" },
-    { id: "ugc", label: "UGC CONTENT" },
-    { id: "ghostwrite", label: "GHOSTWRITING" },
-    { id: "audit", label: "SOCIAL MEDIA AUDIT" },
+    { id: "content", label: "Content Creation" }, { id: "scripts", label: "Video Scripts" },
+    { id: "strategy", label: "Content Strategy" }, { id: "ugc", label: "UGC Content" },
+    { id: "ghostwrite", label: "Ghostwriting" }, { id: "audit", label: "Social Audit" },
   ];
-  const OUTPUT_TYPES = [
-    { id: "gig", label: "NEW GIG" },
-    { id: "message", label: "BUYER MESSAGE" },
-    { id: "faq", label: "GIG FAQs" },
-    { id: "upsell", label: "UPSELL SCRIPT" },
-  ];
-
+  const OUTPUT_TYPES = [{ id: "gig", label: "New Gig" }, { id: "message", label: "Buyer Message" }, { id: "faq", label: "FAQs" }, { id: "upsell", label: "Upsell Script" }];
   const [gigType, setGigType] = useState("content");
   const [outputType, setOutputType] = useState("gig");
   const [niche, setNiche] = useState(config.niche || "AI & Make Money Online");
@@ -1080,520 +685,414 @@ function FiverrAgent({ config, log }) {
 
   const generate = async () => {
     setLoading(true); setOut("");
-    log("fiverr", `Generating Fiverr ${outputType} for ${gigType} gig...`);
-
-    const gigMap = {
-      content: "AI-powered social media content creation (hooks, captions, scripts)",
-      scripts: "viral video scripts for TikTok, YouTube Shorts and Instagram Reels",
-      strategy: "complete content strategy and posting schedule for creators",
-      ugc: "UGC-style content scripts and briefs for brands",
-      ghostwrite: "ghostwriting for creators — posts, captions, newsletters",
-      audit: "social media account audit with growth recommendations",
-    };
-
+    log("fiverr", `Generating Fiverr ${outputType} for ${gigType}`);
+    const gigMap = { content: "AI-powered social media content creation", scripts: "viral video scripts for TikTok, YouTube, Reels", strategy: "complete content strategy for creators", ugc: "UGC-style content scripts for brands", ghostwrite: "ghostwriting for creators — posts, captions, newsletters", audit: "social media audit with growth recommendations" };
     const prompts = {
-      gig: `Create a complete Fiverr gig for "${gigMap[gigType]}" in the "${niche}" niche.
-
-Format EXACTLY:
-
-GIG TITLE: [max 80 chars, include high-search keywords]
-
-CATEGORY: [Fiverr category path]
-
-SEARCH TAGS: [5 comma-separated tags]
-
-DESCRIPTION: [400-500 word description. Start with a hook. Include: what you offer, your process, what they receive, why you're the best choice, CTA. Use line breaks and bullet points.]
-
-PACKAGES:
-BASIC ($25) — [what's included, 2-day delivery]
-STANDARD ($50) — [what's included, 1-day delivery]
-PREMIUM ($100) — [what's included, same-day delivery]
-
-REQUIREMENTS FROM BUYER: [3-5 things to ask buyer when they order]`,
-
-      message: `Write a professional Fiverr welcome message to send buyers who order the "${gigMap[gigType]}" gig. It should: thank them, explain what you need from them, set expectations on delivery, and feel warm but professional. Max 150 words.`,
-
-      faq: `Write 6 FAQ questions and answers for a Fiverr gig offering "${gigMap[gigType]}". Make the answers reassuring, specific, and convert skeptical buyers. Format as Q: / A: pairs.`,
-
-      upsell: `Write a Fiverr upsell message to send to buyers after delivering "${gigMap[gigType]}". Offer them a related service upgrade. Make it feel natural, not pushy. Include a specific offer with price. Max 100 words.`,
+      gig: `Create a complete Fiverr gig for "${gigMap[gigType]}" in "${niche}".\n\nGIG TITLE: [max 80 chars]\nCATEGORY: [path]\nSEARCH TAGS: [5 tags]\nDESCRIPTION: [400-500 words, hook, process, deliverables, CTA]\nPACKAGES:\nBASIC ($25) — [details, 2-day delivery]\nSTANDARD ($50) — [details, 1-day delivery]\nPREMIUM ($100) — [details, same-day]\nREQUIREMENTS: [3-5 questions for buyer]`,
+      message: `Write a Fiverr welcome message for "${gigMap[gigType]}" buyers. Thank them, explain what you need, set expectations. Max 150 words. Warm but professional.`,
+      faq: `Write 6 FAQ questions and answers for a Fiverr "${gigMap[gigType]}" gig. Make answers specific and convert skeptical buyers. Format: Q: / A:`,
+      upsell: `Write a natural Fiverr upsell message after delivering "${gigMap[gigType]}". Offer a related upgrade. Not pushy. Include specific offer with price. Max 100 words.`,
     };
-
-    const result = await callClaude(prompts[outputType]).catch(() => "ERROR. Try again.");
+    const result = await callClaude(prompts[outputType]).catch(() => "Error.");
     setOut(result);
-    log("fiverr", `Fiverr ${outputType} generated — ready to use`);
+    log("fiverr", `Fiverr ${outputType} ready`);
     setLoading(false);
   };
 
   return (
     <div>
-      <AgentStatusBar agentId="fiverr" loading={loading} statusText="GENERATING FIVERR GIG CONTENT..." />
-      <Panel color="#1dbf73" style={{ padding: 14, marginBottom: 10 }}>
-        <SectionLabel color="#1dbf73">GIG SERVICE TYPE</SectionLabel>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {GIG_TYPES.map(g => (
-            <button key={g.id} onClick={() => setGigType(g.id)} style={{
-              padding: "6px 12px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono,
-              fontSize: 10, letterSpacing: 1.5, fontWeight: 700,
-              border: gigType === g.id ? "1px solid #1dbf73" : `1px solid ${N.border}`,
-              background: gigType === g.id ? "#1dbf7318" : "transparent",
-              color: gigType === g.id ? "#1dbf73" : N.textDim,
-              boxShadow: gigType === g.id ? "0 0 6px #1dbf7344" : "none",
-            }}>{g.label}</button>
-          ))}
-        </div>
-      </Panel>
-      <Panel color="#1dbf73" style={{ padding: 14, marginBottom: 10 }}>
-        <SectionLabel color="#1dbf73">GENERATE</SectionLabel>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {OUTPUT_TYPES.map(o => (
-            <button key={o.id} onClick={() => setOutputType(o.id)} style={{
-              flex: 1, padding: "8px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono,
-              fontSize: 10, letterSpacing: 1, border: outputType === o.id ? "1px solid #1dbf73" : `1px solid ${N.border}`,
-              background: outputType === o.id ? "#1dbf7318" : "transparent",
-              color: outputType === o.id ? "#1dbf73" : N.textDim,
-            }}>{o.label}</button>
-          ))}
-        </div>
-      </Panel>
-      <Panel color="#1dbf73" style={{ padding: 14, marginBottom: 14 }}>
-        <SectionLabel color="#1dbf73">NICHE</SectionLabel>
-        <CyberInput value={niche} onChange={setNiche} placeholder="> ENTER NICHE..." />
-      </Panel>
-      <CyberBtn onClick={generate} disabled={loading} color="#1dbf73">
-        {loading ? "💼 AGENT RUNNING..." : "💼 EXECUTE FIVERR AGENT"}
-      </CyberBtn>
-      <OutputBox text={out} label="FIVERR OUTPUT" color="#1dbf73" />
-      {out && outputType === "gig" && (
-        <Panel color="#1dbf73" style={{ padding: 14, marginTop: 10 }}>
-          <div style={{ fontSize: 9, color: "#1dbf73", letterSpacing: 2, marginBottom: 8 }}>◈ PUBLISH CHECKLIST</div>
-          <div style={{ fontSize: 11, color: N.textDim, lineHeight: 1.8 }}>
-            1. Go to <span style={{ color: "#1dbf73" }}>fiverr.com</span> → My Gigs → Create New Gig<br />
-            2. Paste the title, description and tags above<br />
-            3. Set your 3 packages with the prices listed<br />
-            4. Upload your gig image (cyberpunk design already made)<br />
-            5. Add requirements and publish — live in minutes
-          </div>
-        </Panel>
-      )}
+      <LoadingBar loading={loading} color="emerald" T={T} />
+      <Card T={T}><Label T={T}>Service Type</Label><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{GIG_TYPES.map(g => <Chip key={g.id} label={g.label} active={gigType === g.id} onClick={() => setGigType(g.id)} color="emerald" T={T} />)}</div></Card>
+      <Card T={T}><Label T={T}>Generate</Label><div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{OUTPUT_TYPES.map(o => <Chip key={o.id} label={o.label} active={outputType === o.id} onClick={() => setOutputType(o.id)} color="emerald" T={T} />)}</div></Card>
+      <Card T={T}><Label T={T}>Niche</Label><Input value={niche} onChange={setNiche} T={T} /></Card>
+      <Btn onClick={generate} disabled={loading} variant="emerald" T={T}>{loading ? "Generating..." : "💼 Execute Fiverr Agent"}</Btn>
+      <OutputBox text={out} label="Fiverr Output" color="emerald" T={T} />
     </div>
   );
 }
 
-// ─── AGENT 00: COMMAND ───────────────────────────────────────────────────────
-function CommandAgent({ config, log, allAgents }) {
+function CommandAgent({ T, config, log, allAgents }) {
   const AGENT_TASKS = {
-    content:    ["Generate viral hook", "Write full script", "Create caption pack", "Build content series"],
-    publishing: ["Repurpose for channel 2", "Translate to Spanish", "Reformat for beginners", "Create faceless version"],
-    research:   ["Find trending topics", "Analyze competitors", "Generate hook formulas", "Find monetization angles"],
-    scheduler:  ["Build 7-day calendar", "Plan weekly themes", "Optimize post times", "Create content roadmap"],
-    revenue:    ["Run profit analysis", "Audit ad spend", "Find revenue gaps", "Build 30-day plan"],
-    etsy:       ["Generate prompt pack listing", "Create template listing", "Build content calendar listing", "Write monetization guide listing"],
-    fiverr:     ["Create new gig", "Write buyer message", "Generate FAQs", "Build upsell script"],
+    content: ["Generate viral hook", "Write full script", "Create caption pack"], publishing: ["Repurpose for channel 2", "Translate to Spanish"],
+    research: ["Find trending topics", "Analyze competitors"], scheduler: ["Build 7-day calendar", "Plan weekly themes"],
+    revenue: ["Run profit analysis", "Audit ad spend"], etsy: ["Generate prompt pack listing", "Create template listing"],
+    fiverr: ["Create new gig", "Write buyer message"],
   };
-
   const SOCIAL_PLATFORMS = [
-    { id: "tiktok",    label: "TIKTOK",    color: "#a78bfa", fields: ["displayName", "bio", "link", "category"] },
-    { id: "instagram", label: "INSTAGRAM", color: "#f472b6", fields: ["displayName", "bio", "link", "category"] },
-    { id: "youtube",   label: "YOUTUBE",   color: "#f87171", fields: ["channelName", "description", "link", "category"] },
-    { id: "twitter",   label: "X/TWITTER", color: "#60a5fa", fields: ["displayName", "bio", "link", "pinnedTweet"] },
-    { id: "fiverr",    label: "FIVERR",    color: "#1dbf73", fields: ["displayName", "tagline", "skills", "responseTime"] },
-    { id: "etsy",      label: "ETSY",      color: "#ff6b35", fields: ["shopName", "announcement", "aboutShop", "policies"] },
+    { id: "tiktok", label: "TikTok", color: "purple" }, { id: "instagram", label: "Instagram", color: "red" },
+    { id: "youtube", label: "YouTube", color: "red" }, { id: "twitter", label: "X / Twitter", color: "blue" },
+    { id: "fiverr", label: "Fiverr", color: "emerald" }, { id: "etsy", label: "Etsy", color: "orange" },
   ];
 
-  // Terminal state
+  const [tab, setTab] = useState("terminal");
   const [termInput, setTermInput] = useState("");
   const [termLog, setTermLog] = useState([
-    { type: "system", text: "COMMAND AGENT v1.0 INITIALIZED" },
-    { type: "system", text: "ALL 7 SUBORDINATE AGENTS ONLINE" },
-    { type: "system", text: 'TYPE "help" FOR AVAILABLE COMMANDS' },
-    { type: "system", text: "─────────────────────────────────" },
+    { type: "system", text: "Command Agent initialized — all 7 subordinate agents online." },
+    { type: "system", text: 'Type "help" for available commands.' },
   ]);
-  const termRef = useRef(null);
-
-  // Auto mode state
-  const [autoMode, setAutoMode] = useState(false);
-  const [autoInterval, setAutoIntervalState] = useState(null);
-  const [autoTasks, setAutoTasks] = useState([]);
+  const [taskQueue, setTaskQueue] = useState([]);
+  const [completedTasks, setCompletedTasks] = useState([]);
   const [briefing, setBriefing] = useState(null);
   const [briefingLoading, setBriefingLoading] = useState(false);
-
-  // Social media profile state
+  const [autoMode, setAutoMode] = useState(false);
   const [activeProfile, setActiveProfile] = useState("tiktok");
   const [profiles, setProfiles] = useState({});
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileOut, setProfileOut] = useState("");
-
-  // Task queue
-  const [taskQueue, setTaskQueue] = useState([]);
-  const [completedTasks, setCompletedTasks] = useState([]);
-
-  // Tab state
-  const [tab, setTab] = useState("terminal");
+  const termRef = useRef(null);
 
   const pushTerm = useCallback((text, type = "output") => {
-    setTermLog(l => [...l, { type, text, id: Date.now() }]);
+    setTermLog(l => [...l, { id: Date.now(), text, type }]);
     setTimeout(() => { if (termRef.current) termRef.current.scrollTop = termRef.current.scrollHeight; }, 50);
   }, []);
 
   const addTask = useCallback((agentId, task) => {
-    const newTask = { id: Date.now(), agentId, task, status: "queued", time: new Date().toLocaleTimeString("en", { hour12: false }) };
-    setTaskQueue(q => [...q, newTask]);
-    return newTask;
+    const t = { id: Date.now(), agentId, task, status: "queued", time: new Date().toLocaleTimeString("en", { hour12: false }) };
+    setTaskQueue(q => [...q, t]);
   }, []);
 
-  const completeTask = useCallback((taskId) => {
-    setTaskQueue(q => q.filter(t => t.id !== taskId));
-    setCompletedTasks(c => [{ id: taskId, completedAt: new Date().toLocaleTimeString("en", { hour12: false }) }, ...c.slice(0, 19)]);
-  }, []);
-
-  // Command parser
   const handleCommand = useCallback(async (input) => {
     const cmd = input.trim().toLowerCase();
     pushTerm(`> ${input}`, "input");
-
-    if (cmd === "help") {
-      pushTerm(`AVAILABLE COMMANDS:
-  status          — show all agent statuses
-  run [agent]     — trigger a specific agent
-  run all         — trigger all agents in sequence
-  brief           — generate daily briefing
-  queue           — show task queue
-  clear           — clear terminal
-  auto on/off     — toggle autonomous mode
-  assign [agent] [task] — assign specific task
-  social [platform]     — manage social profile
-  report          — generate performance report`, "output");
-      return;
-    }
-
-    if (cmd === "status") {
-      const agents = allAgents.filter(a => a.id !== "cmd");
-      agents.forEach(a => pushTerm(`  AG-${a.num} ${a.label.padEnd(12)} ◈ ONLINE — READY`, "output"));
-      pushTerm(`  ${agents.length} AGENTS OPERATIONAL`, "system");
-      return;
-    }
-
+    if (cmd === "help") { pushTerm(`Commands:\n  status      — show all agents\n  run all     — queue all agents\n  run [agent] — trigger specific agent\n  brief       — generate daily briefing\n  queue       — show task queue\n  report      — performance report\n  auto on/off — toggle autonomous mode\n  clear       — clear terminal`); return; }
+    if (cmd === "status") { allAgents.filter(a => a.id !== "cmd").forEach(a => pushTerm(`  AG-${a.num} ${a.label.padEnd(12)} ✓ Online — Ready`)); return; }
     if (cmd === "clear") { setTermLog([]); return; }
-
-    if (cmd === "queue") {
-      if (taskQueue.length === 0) { pushTerm("TASK QUEUE: EMPTY", "output"); return; }
-      taskQueue.forEach(t => pushTerm(`  [${t.status.toUpperCase()}] AG-${allAgents.find(a=>a.id===t.agentId)?.num} → ${t.task}`, "output"));
-      return;
-    }
-
-    if (cmd === "brief") {
-      setBriefingLoading(true);
-      pushTerm("GENERATING DAILY BRIEFING...", "system");
-      const completed = completedTasks.length;
-      const queued = taskQueue.length;
-      const result = await callClaude(`You are the Command Agent — the AI general manager of an automated content empire in the "${config.niche || "AI & Make Money Online"}" niche.
-
-Generate a sharp, tactical daily briefing report for the empire owner. Include:
-
-EMPIRE STATUS REPORT — ${new Date().toLocaleDateString()}
-
-1. OPERATIONS SUMMARY — ${completed} tasks completed, ${queued} in queue
-2. CONTENT PIPELINE — what should be created today (3 specific content pieces with topics)
-3. REVENUE FOCUS — top 2 monetization actions to take today (Etsy, Fiverr, affiliate)
-4. AGENT DIRECTIVES — specific instructions for each of the 7 agents today
-5. THREAT ANALYSIS — 2 risks or opportunities in the AI/MMO niche right now
-6. COMMANDER'S ORDER — one single most important action to take in the next hour
-
-Be direct, tactical, and specific. No fluff. This is a command briefing.`).catch(() => "ERROR generating briefing.");
-      setBriefing(result);
-      setBriefingLoading(false);
-      pushTerm("BRIEFING GENERATED — VIEW IN BRIEFING TAB", "system");
-      setTab("briefing");
-      return;
-    }
-
-    if (cmd === "auto on") {
-      setAutoMode(true);
-      pushTerm("AUTONOMOUS MODE: ACTIVATED", "system");
-      pushTerm("AGENTS WILL RUN ON 30-MIN INTERVALS", "system");
-      const tasks = Object.entries(AGENT_TASKS).map(([agentId, tasks]) => ({
-        agentId, task: tasks[Math.floor(Math.random() * tasks.length)]
-      }));
-      setAutoTasks(tasks);
-      tasks.forEach(t => { addTask(t.agentId, t.task); pushTerm(`  QUEUED: AG-${allAgents.find(a=>a.id===t.agentId)?.num} → ${t.task}`, "output"); });
-      return;
-    }
-
-    if (cmd === "auto off") {
-      setAutoMode(false);
-      pushTerm("AUTONOMOUS MODE: DEACTIVATED", "system");
-      return;
-    }
-
-    if (cmd === "run all") {
-      pushTerm("INITIATING FULL EMPIRE RUN SEQUENCE...", "system");
-      const agents = allAgents.filter(a => a.id !== "cmd");
-      for (const agent of agents) {
-        const task = AGENT_TASKS[agent.id]?.[0];
-        if (task) { addTask(agent.id, task); pushTerm(`  ◈ AG-${agent.num} ${agent.label} — ${task}`, "output"); }
-        await new Promise(r => setTimeout(r, 300));
-      }
-      pushTerm("ALL AGENTS TASKED — CHECK QUEUE", "system");
-      return;
-    }
-
-    if (cmd.startsWith("run ")) {
-      const agentName = cmd.replace("run ", "").trim();
-      const agent = allAgents.find(a => a.id === agentName || a.label.toLowerCase() === agentName);
-      if (!agent) { pushTerm(`ERROR: AGENT "${agentName}" NOT FOUND`, "error"); return; }
-      const task = AGENT_TASKS[agent.id]?.[0] || "Execute primary directive";
-      addTask(agent.id, task);
-      pushTerm(`AG-${agent.num} ${agent.label} TASKED: ${task}`, "system");
-      log("cmd", `Commanded AG-${agent.num} to: ${task}`);
-      return;
-    }
-
-    if (cmd.startsWith("assign ")) {
-      const parts = cmd.replace("assign ", "").split(" ");
-      const agentName = parts[0];
-      const task = parts.slice(1).join(" ");
-      const agent = allAgents.find(a => a.id === agentName || a.label.toLowerCase() === agentName);
-      if (!agent) { pushTerm(`ERROR: AGENT "${agentName}" NOT FOUND`, "error"); return; }
-      addTask(agent.id, task || AGENT_TASKS[agent.id]?.[0]);
-      pushTerm(`ASSIGNED TO AG-${agent.num}: ${task}`, "system");
-      return;
-    }
-
-    if (cmd.startsWith("social ")) {
-      const platform = cmd.replace("social ", "").trim();
-      const found = SOCIAL_PLATFORMS.find(p => p.id === platform || p.label.toLowerCase().includes(platform));
-      if (found) { setActiveProfile(found.id); setTab("social"); pushTerm(`OPENING ${found.label} PROFILE MANAGER`, "system"); }
-      else pushTerm(`ERROR: PLATFORM "${platform}" NOT FOUND`, "error");
-      return;
-    }
-
-    if (cmd === "report") {
-      pushTerm(`EMPIRE PERFORMANCE REPORT
-  ─────────────────────────
-  AGENTS ONLINE:     8
-  TASKS COMPLETED:   ${completedTasks.length}
-  TASKS IN QUEUE:    ${taskQueue.length}
-  AUTO MODE:         ${autoMode ? "ACTIVE" : "INACTIVE"}
-  NICHE:             ${config.niche || "AI & MMO"}
-  BACKEND:           ONLINE
-  ─────────────────────────`, "output");
-      return;
-    }
-
-    // Natural language fallback — ask Claude
-    pushTerm("PROCESSING COMMAND...", "system");
-    const result = await callClaude(`You are the Command Agent — AI general manager of a content empire. The user typed this command: "${input}". Interpret it and respond with a brief, tactical action plan in under 100 words. Be direct and specific. Use military-style brevity.`).catch(() => "ERROR.");
-    pushTerm(result, "output");
-    log("cmd", `Command executed: ${input}`);
+    if (cmd === "queue") { taskQueue.length === 0 ? pushTerm("Task queue is empty.") : taskQueue.forEach(t => pushTerm(`  [${t.status}] AG-${allAgents.find(a=>a.id===t.agentId)?.num} → ${t.task}`)); return; }
+    if (cmd === "auto on") { setAutoMode(true); pushTerm("Autonomous mode activated."); Object.entries(AGENT_TASKS).forEach(([id, tasks]) => addTask(id, tasks[0])); return; }
+    if (cmd === "auto off") { setAutoMode(false); pushTerm("Autonomous mode deactivated."); return; }
+    if (cmd === "run all") { pushTerm("Queuing all agents..."); allAgents.filter(a => a.id !== "cmd").forEach(a => { const task = AGENT_TASKS[a.id]?.[0]; if (task) { addTask(a.id, task); pushTerm(`  AG-${a.num} ${a.label} → ${task}`); } }); return; }
+    if (cmd.startsWith("run ")) { const name = cmd.replace("run ", ""); const agent = allAgents.find(a => a.id === name || a.label.toLowerCase() === name); if (!agent) { pushTerm(`Agent "${name}" not found.`, "error"); return; } const task = AGENT_TASKS[agent.id]?.[0] || "Execute directive"; addTask(agent.id, task); pushTerm(`AG-${agent.num} ${agent.label} tasked: ${task}`); log("cmd", `Commanded AG-${agent.num}`); return; }
+    if (cmd === "report") { pushTerm(`Empire Report\n  Agents online: ${allAgents.length - 1}\n  Tasks completed: ${completedTasks.length}\n  Queue: ${taskQueue.length}\n  Auto mode: ${autoMode ? "Active" : "Inactive"}`); return; }
+    if (cmd === "brief") { setBriefingLoading(true); pushTerm("Generating briefing..."); const result = await callClaude(`You are the Command Agent — AI GM of a content empire in "${config.niche||"AI & MMO"}". ${completedTasks.length} tasks completed, ${taskQueue.length} in queue.\n\nGenerate a sharp daily briefing:\n1. OPERATIONS SUMMARY\n2. CONTENT PIPELINE — 3 specific pieces to create today\n3. REVENUE FOCUS — top 2 monetization actions\n4. AGENT DIRECTIVES — specific orders for each agent\n5. THREAT ANALYSIS — 2 risks/opportunities\n6. COMMANDER'S ORDER — single most important action right now\n\nBe direct, tactical, specific.`).catch(() => "Error."); setBriefing(result); setBriefingLoading(false); pushTerm("Briefing generated. View in Briefing tab."); setTab("briefing"); return; }
+    pushTerm("Processing...");
+    const result = await callClaude(`You are the Command Agent GM of an AI content empire. User command: "${input}". Respond with a brief tactical action plan in under 80 words.`).catch(() => "Error.");
+    pushTerm(result);
+    log("cmd", `Command: ${input}`);
   }, [taskQueue, completedTasks, autoMode, config, allAgents, pushTerm, addTask, log]);
 
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter" && termInput.trim()) {
-      handleCommand(termInput);
-      setTermInput("");
-    }
-  };
+  const handleKeyDown = (e) => { if (e.key === "Enter" && termInput.trim()) { handleCommand(termInput); setTermInput(""); } };
 
-  // Generate social profile
   const generateProfile = async () => {
     setProfileLoading(true); setProfileOut("");
     const platform = SOCIAL_PLATFORMS.find(p => p.id === activeProfile);
-    const profileData = profiles[activeProfile] || {};
-    log("cmd", `Generating ${platform.label} profile optimization...`);
-
-    const result = await callClaude(`You are a social media profile optimization expert. Generate a complete optimized profile for ${platform.label} in the "${config.niche || "AI & Make Money Online"}" niche.
-
-Current info: ${JSON.stringify(profileData)}
-
-Generate EXACTLY:
-
-DISPLAY NAME: [catchy, memorable, niche-relevant]
-BIO/DESCRIPTION: [platform-optimized bio that hooks followers, includes keywords, has personality — max character limit for ${platform.label}]
-LINK IN BIO STRATEGY: [what URL to use and why]
-PROFILE KEYWORDS: [5 keywords to naturally include]
-CONTENT PILLARS: [3 content pillars this account should stick to]
-POSTING STRATEGY: [best times, frequency, content mix for ${platform.label}]
-GROWTH HACK: [one specific tactic to get first 1000 followers on ${platform.label}]`).catch(() => "ERROR.");
-
+    log("cmd", `Optimizing ${platform.label} profile`);
+    const result = await callClaude(`Optimize a ${platform.label} profile for "${config.niche||"AI & MMO"}" niche.\nCurrent data: ${JSON.stringify(profiles[activeProfile] || {})}\n\nGenerate:\nDISPLAY NAME: [catchy, niche-relevant]\nBIO: [optimized for ${platform.label}, includes keywords]\nLINK STRATEGY: [what URL to use and why]\nCONTENT PILLARS: [3 pillars for this account]\nPOSTING STRATEGY: [best times, frequency, mix]\nGROWTH HACK: [one tactic to get first 1000 followers on ${platform.label}]`).catch(() => "Error.");
     setProfileOut(result);
     setProfileLoading(false);
-    log("cmd", `${platform.label} profile generated`);
+    log("cmd", `${platform.label} profile optimized`);
   };
 
-  const agentColors = Object.fromEntries(allAgents.map(a => [a.id, a.color]));
-  const termColors = { system: "#00e5ff", input: N.green, output: N.text, error: "#ff2d55" };
+  const tabs = [["terminal","⌘ Terminal"],["queue","Tasks"],["social","Social Profiles"],["briefing","Briefing"]];
+  const termColors = { system: T.accent, input: T.green, output: T.text, error: T.red };
 
   return (
     <div>
-      {/* Tab bar */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 14 }}>
-        {[["terminal","⌘ TERMINAL"],["queue","◈ TASK QUEUE"],["social","◉ SOCIAL PROFILES"],["briefing","◎ BRIEFING"]].map(([id, label]) => (
+      <div style={{ display: "flex", gap: 4, marginBottom: 16, background: T.bg3, borderRadius: 10, padding: 4 }}>
+        {tabs.map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)} style={{
-            flex: 1, padding: "8px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono,
-            fontSize: 10, letterSpacing: 1.5, fontWeight: 700,
-            border: tab === id ? "1px solid #ffffff" : `1px solid ${N.border}`,
-            background: tab === id ? "#ffffff15" : "transparent",
-            color: tab === id ? "#ffffff" : N.textDim,
-            boxShadow: tab === id ? "0 0 8px #ffffff33" : "none",
+            flex: 1, padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600,
+            border: "none", background: tab === id ? T.bg2 : "transparent",
+            color: tab === id ? T.text : T.text2, boxShadow: tab === id ? T.shadow : "none",
+            transition: "all 0.15s", fontFamily: "inherit",
           }}>{label}</button>
         ))}
       </div>
 
-      {/* ── TERMINAL TAB ── */}
       {tab === "terminal" && (
         <div>
-          <Panel color="#ffffff" style={{ marginBottom: 12 }}>
-            <div style={{ padding: "8px 12px", borderBottom: `1px solid #ffffff22`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 9, color: "#ffffff", letterSpacing: 3 }}>⌘ COMMAND TERMINAL</span>
+          <Card T={T} style={{ padding: 0 }}>
+            <div style={{ padding: "12px 16px", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>Command Terminal</span>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <span style={{ fontSize: 9, color: autoMode ? N.green : N.textDim, letterSpacing: 1 }}>
-                  AUTO: {autoMode ? "ON" : "OFF"}
-                </span>
-                <button onClick={() => handleCommand(autoMode ? "auto off" : "auto on")} style={{
-                  padding: "3px 10px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono, fontSize: 9,
-                  letterSpacing: 1, border: `1px solid ${autoMode ? N.green : N.border}`,
-                  background: autoMode ? `${N.green}18` : "transparent",
-                  color: autoMode ? N.green : N.textDim,
-                }}>{autoMode ? "DEACTIVATE" : "ACTIVATE"}</button>
+                <span style={{ fontSize: 12, color: autoMode ? T.green : T.text2 }}>Auto: {autoMode ? "On" : "Off"}</span>
+                <button onClick={() => handleCommand(autoMode ? "auto off" : "auto on")} style={{ fontSize: 12, color: T.text2, background: T.bg3, border: `1px solid ${T.border2}`, padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontFamily: "inherit" }}>{autoMode ? "Deactivate" : "Activate"}</button>
               </div>
             </div>
-            {/* Terminal output */}
-            <div ref={termRef} style={{ height: 320, overflowY: "auto", padding: 14, fontFamily: N.mono }}>
+            <div ref={termRef} style={{ height: 300, overflowY: "auto", padding: 16, fontFamily: "monospace", background: T.bg }}>
               {termLog.map((entry, i) => (
-                <div key={entry.id || i} style={{ fontSize: 11, lineHeight: 1.7, color: termColors[entry.type] || N.text, marginBottom: 2, whiteSpace: "pre-wrap" }}>
-                  {entry.type === "input" ? <span style={{ color: N.green }}>{entry.text}</span> : entry.text}
-                </div>
+                <div key={entry.id || i} style={{ fontSize: 13, lineHeight: 1.7, color: termColors[entry.type] || T.text, marginBottom: 2, whiteSpace: "pre-wrap" }}>{entry.text}</div>
               ))}
-              <div className="blink" style={{ display: "inline-block", width: 8, height: 14, background: N.green, marginTop: 4 }} />
             </div>
-            {/* Input */}
-            <div style={{ padding: "10px 14px", borderTop: `1px solid #ffffff22`, display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 12, color: N.green }}>{">"}</span>
-              <input value={termInput} onChange={e => setTermInput(e.target.value)} onKeyDown={handleKeyDown}
-                placeholder='type command or "help"...'
-                style={{ flex: 1, background: "none", border: "none", color: N.green, fontFamily: N.mono, fontSize: 12, outline: "none" }} />
+            <div style={{ padding: "10px 16px", borderTop: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 8, background: T.bg2 }}>
+              <span style={{ fontSize: 14, color: T.green, fontFamily: "monospace" }}>{">"}</span>
+              <input value={termInput} onChange={e => setTermInput(e.target.value)} onKeyDown={handleKeyDown} placeholder='Type a command or "help"...' style={{ flex: 1, background: "none", border: "none", color: T.text, fontSize: 14, outline: "none", fontFamily: "monospace" }} />
             </div>
-          </Panel>
-          {/* Quick commands */}
-          <Panel color="#ffffff22" style={{ padding: 14 }}>
-            <SectionLabel color="#ffffff88">QUICK COMMANDS</SectionLabel>
+          </Card>
+          <Card T={T}>
+            <Label T={T}>Quick Commands</Label>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {["status", "run all", "brief", "queue", "report", "auto on", "run content", "run research", "run scheduler"].map(cmd => (
-                <button key={cmd} onClick={() => { handleCommand(cmd); }} style={{
-                  padding: "5px 12px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono,
-                  fontSize: 9, letterSpacing: 1, border: `1px solid #ffffff22`,
-                  background: "transparent", color: N.textDim,
-                }}>{cmd}</button>
+              {["status","run all","brief","queue","report","auto on","run content","run research","run scheduler"].map(cmd => (
+                <button key={cmd} onClick={() => handleCommand(cmd)} style={{ padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12, border: `1px solid ${T.border2}`, background: T.bg3, color: T.text2, fontFamily: "inherit" }}>{cmd}</button>
               ))}
             </div>
-          </Panel>
+          </Card>
         </div>
       )}
 
-      {/* ── TASK QUEUE TAB ── */}
       {tab === "queue" && (
         <div>
-          <Panel color="#ffffff" style={{ padding: 0, marginBottom: 12 }}>
-            <div style={{ padding: "8px 12px", borderBottom: `1px solid #ffffff22`, display: "flex", justifyContent: "space-between" }}>
-              <span style={{ fontSize: 9, color: "#ffffff", letterSpacing: 3 }}>◈ ACTIVE QUEUE ({taskQueue.length})</span>
-              <button onClick={() => setTaskQueue([])} style={{ fontSize: 9, color: N.textDim, background: "none", border: `1px solid ${N.border}`, padding: "2px 8px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono }}>CLEAR</button>
+          <Card T={T} style={{ padding: 0 }}>
+            <div style={{ padding: "12px 16px", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>Active Tasks ({taskQueue.length})</span>
+              <button onClick={() => setTaskQueue([])} style={{ fontSize: 12, color: T.text2, background: "none", border: `1px solid ${T.border2}`, padding: "3px 10px", borderRadius: 6, cursor: "pointer", fontFamily: "inherit" }}>Clear</button>
             </div>
-            {taskQueue.length === 0 ? (
-              <div style={{ padding: 20, textAlign: "center", fontSize: 11, color: N.textDim }}>NO TASKS IN QUEUE — TYPE "run all" TO START</div>
-            ) : taskQueue.map(task => {
-              const agent = allAgents.find(a => a.id === task.agentId);
-              return (
-                <div key={task.id} style={{ padding: "10px 14px", borderBottom: `1px solid ${N.border}`, display: "flex", alignItems: "center", gap: 12 }}>
-                  <span style={{ fontSize: 12, color: agent?.color }}>{agent?.icon}</span>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 10, color: agent?.color, letterSpacing: 1 }}>AG-{agent?.num} {agent?.label}</div>
-                    <div style={{ fontSize: 11, color: N.text, marginTop: 2 }}>{task.task}</div>
+            {taskQueue.length === 0 ? <div style={{ padding: 24, textAlign: "center", color: T.text2, fontSize: 14 }}>No tasks queued — type "run all" to start</div>
+              : taskQueue.map(task => {
+                const agent = allAgents.find(a => a.id === task.agentId);
+                return (
+                  <div key={task.id} style={{ padding: "12px 16px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 12 }}>
+                    <span style={{ fontSize: 16 }}>{agent?.icon}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 12, color: T[agent?.color] || T.accent, fontWeight: 600 }}>AG-{agent?.num} {agent?.label}</div>
+                      <div style={{ fontSize: 13, color: T.text }}>{task.task}</div>
+                    </div>
+                    <span style={{ fontSize: 11, color: T.text2 }}>{task.time}</span>
+                    <button onClick={() => { setTaskQueue(q => q.filter(t => t.id !== task.id)); setCompletedTasks(c => [task, ...c.slice(0,19)]); }} style={{ fontSize: 12, color: T.green, background: T.greenBg, border: `1px solid ${T.green}33`, padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontFamily: "inherit" }}>Done</button>
                   </div>
-                  <div style={{ fontSize: 9, color: N.textDim }}>{task.time}</div>
-                  <button onClick={() => completeTask(task.id)} style={{ fontSize: 9, color: N.green, background: `${N.green}18`, border: `1px solid ${N.green}44`, padding: "3px 8px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono }}>DONE</button>
-                </div>
-              );
-            })}
-          </Panel>
-          <Panel color="#ffffff22" style={{ padding: 0 }}>
-            <div style={{ padding: "8px 12px", borderBottom: `1px solid #ffffff22` }}>
-              <span style={{ fontSize: 9, color: "#ffffff88", letterSpacing: 3 }}>◈ COMPLETED ({completedTasks.length})</span>
-            </div>
-            {completedTasks.length === 0 ? (
-              <div style={{ padding: 16, fontSize: 11, color: N.textDim, textAlign: "center" }}>NO COMPLETED TASKS YET</div>
-            ) : completedTasks.slice(0, 10).map((t, i) => (
-              <div key={t.id} style={{ padding: "8px 14px", borderBottom: i < 9 ? `1px solid ${N.border}` : "none", fontSize: 10, color: N.textDim }}>
-                ✓ COMPLETED AT {t.completedAt}
+                );
+              })}
+          </Card>
+          {completedTasks.length > 0 && (
+            <Card T={T} style={{ padding: 0 }}>
+              <div style={{ padding: "12px 16px", borderBottom: `1px solid ${T.border}` }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: T.text2 }}>Completed ({completedTasks.length})</span>
               </div>
-            ))}
-          </Panel>
+              {completedTasks.slice(0, 10).map((t, i) => (
+                <div key={t.id} style={{ padding: "10px 16px", borderBottom: i < 9 ? `1px solid ${T.border}` : "none", fontSize: 13, color: T.text2 }}>✓ {allAgents.find(a=>a.id===t.agentId)?.label} — {t.task}</div>
+              ))}
+            </Card>
+          )}
         </div>
       )}
 
-      {/* ── SOCIAL PROFILES TAB ── */}
       {tab === "social" && (
         <div>
-          <Panel color="#ffffff22" style={{ padding: 12, marginBottom: 12 }}>
-            <SectionLabel color="#ffffff88">SELECT PLATFORM</SectionLabel>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {SOCIAL_PLATFORMS.map(p => (
-                <button key={p.id} onClick={() => { setActiveProfile(p.id); setProfileOut(""); }} style={{
-                  padding: "7px 14px", borderRadius: 2, cursor: "pointer", fontFamily: N.mono,
-                  fontSize: 10, letterSpacing: 1.5, fontWeight: 700,
-                  border: activeProfile === p.id ? `1px solid ${p.color}` : `1px solid ${N.border}`,
-                  background: activeProfile === p.id ? `${p.color}18` : "transparent",
-                  color: activeProfile === p.id ? p.color : N.textDim,
-                  boxShadow: activeProfile === p.id ? `0 0 8px ${p.color}44` : "none",
-                }}>{p.label}</button>
-              ))}
+          <Card T={T}>
+            <Label T={T}>Platform</Label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 0 }}>
+              {SOCIAL_PLATFORMS.map(p => <Chip key={p.id} label={p.label} active={activeProfile === p.id} onClick={() => { setActiveProfile(p.id); setProfileOut(""); }} color={p.color} T={T} />)}
             </div>
-          </Panel>
-
+          </Card>
           {(() => {
             const platform = SOCIAL_PLATFORMS.find(p => p.id === activeProfile);
+            const fields = { tiktok: ["displayName","bio","link","category"], instagram: ["displayName","bio","link","category"], youtube: ["channelName","description","link","category"], twitter: ["displayName","bio","link","pinnedPost"], fiverr: ["displayName","tagline","skills","responseTime"], etsy: ["shopName","announcement","aboutShop","policies"] }[activeProfile] || [];
             return (
               <div>
-                <Panel color={platform.color} style={{ padding: 14, marginBottom: 12 }}>
-                  <SectionLabel color={platform.color}>{platform.label} PROFILE DATA</SectionLabel>
+                <Card T={T}>
+                  <Label T={T}>{platform.label} Profile Data</Label>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                    {platform.fields.map(field => (
+                    {fields.map(field => (
                       <div key={field}>
-                        <div style={{ fontSize: 9, color: N.textDim, letterSpacing: 1.5, marginBottom: 5, textTransform: "uppercase" }}>{field.replace(/([A-Z])/g, ' $1').trim()}</div>
-                        <input value={profiles[activeProfile]?.[field] || ""} onChange={e => setProfiles(p => ({ ...p, [activeProfile]: { ...p[activeProfile], [field]: e.target.value } }))}
-                          placeholder={`> enter ${field}...`}
-                          style={{ width: "100%", background: N.dark, border: `1px solid ${N.border}`, color: N.text, fontFamily: N.mono, fontSize: 11, padding: "8px 10px", borderRadius: 2, outline: "none" }} />
+                        <div style={{ fontSize: 12, color: T.text2, marginBottom: 5, textTransform: "capitalize" }}>{field.replace(/([A-Z])/g, ' $1').trim()}</div>
+                        <Input value={profiles[activeProfile]?.[field] || ""} onChange={v => setProfiles(p => ({ ...p, [activeProfile]: { ...p[activeProfile], [field]: v } }))} placeholder={`Enter ${field}...`} T={T} />
                       </div>
                     ))}
                   </div>
-                </Panel>
-                <AgentStatusBar agentId="cmd" loading={profileLoading} statusText={`OPTIMIZING ${platform.label} PROFILE...`} />
-                <CyberBtn onClick={generateProfile} disabled={profileLoading} color={platform.color}>
-                  {profileLoading ? "⌘ OPTIMIZING..." : `⌘ OPTIMIZE ${platform.label} PROFILE`}
-                </CyberBtn>
-                <OutputBox text={profileOut} label={`${platform.label} PROFILE OUTPUT`} color={platform.color} />
+                </Card>
+                <LoadingBar loading={profileLoading} color={platform.color} T={T} />
+                <Btn onClick={generateProfile} disabled={profileLoading} variant={platform.color} T={T}>{profileLoading ? "Optimizing..." : `Optimize ${platform.label} Profile`}</Btn>
+                <OutputBox text={profileOut} label={`${platform.label} Profile`} color={platform.color} T={T} />
               </div>
             );
           })()}
         </div>
       )}
 
-      {/* ── BRIEFING TAB ── */}
       {tab === "briefing" && (
         <div>
-          <AgentStatusBar agentId="cmd" loading={briefingLoading} statusText="GENERATING EMPIRE BRIEFING..." />
-          <CyberBtn onClick={() => handleCommand("brief")} disabled={briefingLoading} color="#ffffff" style={{ marginBottom: 14 }}>
-            {briefingLoading ? "⌘ GENERATING..." : "⌘ GENERATE TODAY'S BRIEFING"}
-          </CyberBtn>
-          {briefing ? (
-            <OutputBox text={briefing} label="DAILY EMPIRE BRIEFING" color="#ffffff" />
-          ) : (
-            <Panel color="#ffffff22" style={{ padding: 30, textAlign: "center" }}>
-              <div style={{ fontSize: 11, color: N.textDim, letterSpacing: 2 }}>NO BRIEFING YET</div>
-              <div style={{ fontSize: 9, color: N.textDim, marginTop: 6 }}>CLICK GENERATE OR TYPE "brief" IN TERMINAL</div>
-            </Panel>
-          )}
+          <LoadingBar loading={briefingLoading} color="accent" T={T} />
+          <Btn onClick={() => handleCommand("brief")} disabled={briefingLoading} T={T} style={{ marginBottom: 16 }}>
+            {briefingLoading ? "Generating briefing..." : "⌘ Generate Today's Briefing"}
+          </Btn>
+          {briefing ? <OutputBox text={briefing} label="Daily Empire Briefing" color="accent" T={T} />
+            : <Card T={T} style={{ textAlign: "center", padding: 40 }}><div style={{ color: T.text2, fontSize: 14 }}>No briefing yet — click Generate or type "brief" in the terminal</div></Card>}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── MAIN APP ────────────────────────────────────────────────────────────────
+export default function AgentEmpire() {
+  const [darkMode, setDarkMode] = useState(true);
+  const [session, setSession] = useState(null);
+  const [userEmail, setUserEmail] = useState("");
+  const [active, setActive] = useState("cmd");
+  const [genContent, setGenContent] = useState("");
+  const [genTopic, setGenTopic] = useState("");
+  const [backendStatus, setBackendStatus] = useState("checking");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [config, setConfig] = useState({ niche: "AI & Make Money Online", brandVoice: "hype" });
+  const [activityLog, pushLog] = useActivityLog();
+  const [showLog, setShowLog] = useState(false);
+
+  const T = darkMode ? dark : light;
+
+  useEffect(() => {
+    const css = `
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: 'Inter', sans-serif; }
+      @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+      @keyframes progress { 0%{transform:translateX(-100%)} 100%{transform:translateX(200%)} }
+      input::placeholder, textarea::placeholder { color: ${T.text3}; }
+      input:focus, textarea:focus { border-color: ${T.accent} !important; }
+    `;
+    const el = document.createElement("style");
+    el.textContent = css;
+    document.head.appendChild(el);
+    return () => document.head.removeChild(el);
+  }, [darkMode]);
+
+  // Check existing session
+  useEffect(() => {
+    const token = localStorage.getItem("ae_token");
+    const email = localStorage.getItem("ae_email");
+    if (token && email) {
+      supabaseGetUser(token).then(user => {
+        if (user.id) { setSession(token); setUserEmail(email); }
+        else { localStorage.removeItem("ae_token"); localStorage.removeItem("ae_email"); }
+      });
+    }
+  }, []);
+
+  // Backend status
+  useEffect(() => {
+    fetch(BACKEND).then(r => r.json()).then(() => setBackendStatus("online")).catch(() => setBackendStatus("offline"));
+  }, []);
+
+  const handleLogin = (token, email) => { setSession(token); setUserEmail(email); };
+  const handleLogout = () => { localStorage.removeItem("ae_token"); localStorage.removeItem("ae_email"); setSession(null); setUserEmail(""); };
+  const handleGenerated = useCallback((content, topic) => { setGenContent(content); setGenTopic(topic); }, []);
+
+  if (!session) return <LoginPage T={T} darkMode={darkMode} setDarkMode={setDarkMode} onLogin={handleLogin} />;
+
+  const activeMeta = AGENTS_META.find(a => a.id === active);
+  const accentColor = T[activeMeta?.color] || T.accent;
+
+  return (
+    <div style={{ minHeight: "100vh", background: T.bg, display: "flex", flexDirection: "column" }}>
+      {/* TOP NAV */}
+      <div style={{ height: 56, borderBottom: `1px solid ${T.border}`, background: T.bg2, display: "flex", alignItems: "center", padding: "0 20px", gap: 16, position: "sticky", top: 0, zIndex: 50, boxShadow: T.shadow }}>
+        <button onClick={() => setSidebarOpen(s => !s)} style={{ background: "none", border: "none", color: T.text2, cursor: "pointer", fontSize: 18, padding: 4 }}>☰</button>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: T.accentBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>⌘</div>
+          <span style={{ fontSize: 15, fontWeight: 700, color: T.text }}>Agent Empire</span>
+        </div>
+
+        {/* Agent tabs — scrollable */}
+        <div style={{ flex: 1, display: "flex", gap: 2, overflowX: "auto", padding: "0 8px" }}>
+          {AGENTS_META.map(a => {
+            const c = T[a.color] || T.accent;
+            return (
+              <button key={a.id} onClick={() => setActive(a.id)} style={{
+                padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 500,
+                border: "none", background: active === a.id ? T[a.color + "Bg"] || T.accentBg : "transparent",
+                color: active === a.id ? c : T.text2, whiteSpace: "nowrap",
+                transition: "all 0.15s", fontFamily: "inherit",
+              }}>
+                {a.icon} {a.label}
+                {a.id === "publishing" && genContent && active !== "publishing" && (
+                  <span style={{ marginLeft: 6, background: T.blue, color: "#fff", borderRadius: 10, padding: "1px 6px", fontSize: 10 }}>New</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Right controls */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: backendStatus === "online" ? T.green : T.red }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: backendStatus === "online" ? T.green : T.red }} />
+            {backendStatus === "online" ? "Live" : "Offline"}
+          </div>
+          <button onClick={() => setShowLog(s => !s)} style={{ padding: "5px 12px", borderRadius: 8, cursor: "pointer", fontSize: 12, border: `1px solid ${T.border2}`, background: showLog ? T.accentBg : "transparent", color: showLog ? T.accent : T.text2, fontFamily: "inherit" }}>Log</button>
+          <button onClick={() => setDarkMode(d => !d)} style={{ padding: "5px 10px", borderRadius: 8, cursor: "pointer", fontSize: 14, border: `1px solid ${T.border2}`, background: "transparent", color: T.text2 }}>{darkMode ? "☀️" : "🌙"}</button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 10, borderLeft: `1px solid ${T.border}` }}>
+            <div style={{ width: 28, height: 28, borderRadius: "50%", background: T.accentBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: T.accent, fontWeight: 700 }}>{userEmail[0]?.toUpperCase()}</div>
+            <button onClick={handleLogout} style={{ fontSize: 12, color: T.text2, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>Sign out</button>
+          </div>
+        </div>
+      </div>
+
+      {/* BODY */}
+      <div style={{ display: "flex", flex: 1 }}>
+        {/* SIDEBAR */}
+        {sidebarOpen && (
+          <div style={{ width: 220, borderRight: `1px solid ${T.border}`, background: T.bg2, padding: "16px 12px", flexShrink: 0, overflowY: "auto" }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: T.text2, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8, padding: "0 8px" }}>Agents</div>
+            {AGENTS_META.map(a => {
+              const c = T[a.color] || T.accent;
+              return (
+                <button key={a.id} onClick={() => setActive(a.id)} style={{
+                  width: "100%", padding: "8px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left",
+                  border: "none", background: active === a.id ? T[a.color + "Bg"] || T.accentBg : "transparent",
+                  color: active === a.id ? c : T.text2, marginBottom: 2, display: "flex", alignItems: "center", gap: 10,
+                  transition: "all 0.15s", fontFamily: "inherit", fontSize: 13, fontWeight: active === a.id ? 600 : 400,
+                }}>
+                  <span style={{ fontSize: 14 }}>{a.icon}</span>
+                  <span>{a.label}</span>
+                  <span style={{ marginLeft: "auto", fontSize: 10, color: T.text3 }}>{a.num}</span>
+                </button>
+              );
+            })}
+
+            <div style={{ height: 1, background: T.border, margin: "16px 8px" }} />
+
+            <div style={{ fontSize: 11, fontWeight: 600, color: T.text2, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8, padding: "0 8px" }}>Settings</div>
+            <div style={{ padding: "8px 12px" }}>
+              <div style={{ fontSize: 12, color: T.text2, marginBottom: 6 }}>Niche</div>
+              <Input value={config.niche} onChange={v => setConfig(c => ({ ...c, niche: v }))} T={T} />
+            </div>
+          </div>
+        )}
+
+        {/* MAIN CONTENT */}
+        <div style={{ flex: 1, overflow: "auto", display: "flex" }}>
+          <div style={{ flex: 1, maxWidth: 760, margin: "0 auto", padding: 24 }}>
+            {/* Agent header */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: T[(activeMeta?.color || "accent") + "Bg"] || T.accentBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{activeMeta?.icon}</div>
+              <div>
+                <h1 style={{ fontSize: 18, fontWeight: 700, color: T.text, margin: 0 }}>{activeMeta?.label} Agent</h1>
+                <p style={{ fontSize: 13, color: T.text2, margin: 0 }}>Agent {activeMeta?.num} — {config.niche}</p>
+              </div>
+              <Badge color={activeMeta?.color} T={T}>{activeMeta?.num}</Badge>
+            </div>
+
+            {active === "cmd"        && <CommandAgent T={T} config={config} log={pushLog} allAgents={AGENTS_META} />}
+            {active === "content"    && <ContentAgent T={T} config={config} log={pushLog} onGenerated={handleGenerated} />}
+            {active === "publishing" && <PublishingAgent T={T} config={config} log={pushLog} incoming={genContent} incomingTopic={genTopic} />}
+            {active === "research"   && <ResearchAgent T={T} config={config} log={pushLog} />}
+            {active === "scheduler"  && <SchedulerAgent T={T} config={config} log={pushLog} />}
+            {active === "revenue"    && <RevenueAgent T={T} config={config} log={pushLog} />}
+            {active === "etsy"       && <EtsyAgent T={T} config={config} log={pushLog} />}
+            {active === "fiverr"     && <FiverrAgent T={T} config={config} log={pushLog} />}
+          </div>
+
+          {/* Activity log panel */}
+          {showLog && (
+            <div style={{ width: 260, borderLeft: `1px solid ${T.border}`, background: T.bg2, flexShrink: 0, display: "flex", flexDirection: "column" }}>
+              <div style={{ padding: "12px 16px", borderBottom: `1px solid ${T.border}`, fontSize: 13, fontWeight: 600, color: T.text }}>Activity Log</div>
+              <div style={{ flex: 1, overflowY: "auto", padding: 12 }}>
+                {activityLog.length === 0 && <div style={{ fontSize: 13, color: T.text2, textAlign: "center", marginTop: 20 }}>No activity yet</div>}
+                {activityLog.map(entry => {
+                  const agent = AGENTS_META.find(a => a.id === entry.agentId);
+                  return (
+                    <div key={entry.id} style={{ marginBottom: 10, padding: "8px 10px", borderRadius: 8, background: T.bg3, border: `1px solid ${T.border}` }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: T[agent?.color] || T.accent }}>{agent?.icon} {agent?.label}</span>
+                        <span style={{ fontSize: 10, color: T.text3 }}>{entry.time}</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: T.text2, lineHeight: 1.4 }}>{entry.msg}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
