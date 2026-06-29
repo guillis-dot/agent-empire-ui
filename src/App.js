@@ -913,6 +913,16 @@ function CommandAgent({ T, config, log, allAgents }) {
 }
 
 // ─── MAIN APP ────────────────────────────────────────────────────────────────
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth < 768);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+  return isMobile;
+}
+
 export default function AgentEmpire() {
   const [darkMode, setDarkMode] = useState(true);
   const [session, setSession] = useState(null);
@@ -921,7 +931,8 @@ export default function AgentEmpire() {
   const [genContent, setGenContent] = useState("");
   const [genTopic, setGenTopic] = useState("");
   const [backendStatus, setBackendStatus] = useState("checking");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const isMobile = useIsMobile();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [config, setConfig] = useState({ niche: "AI & Make Money Online", brandVoice: "hype" });
   const [activityLog, pushLog] = useActivityLog();
   const [showLog, setShowLog] = useState(false);
@@ -937,6 +948,17 @@ export default function AgentEmpire() {
       @keyframes progress { 0%{transform:translateX(-100%)} 100%{transform:translateX(200%)} }
       input::placeholder, textarea::placeholder { color: ${T.text3}; }
       input:focus, textarea:focus { border-color: ${T.accent} !important; }
+      ::-webkit-scrollbar { width: 4px; height: 4px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: ${T.border2}; border-radius: 4px; }
+      .mobile-sidebar-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 40; }
+      @media (max-width: 768px) {
+        .desktop-only { display: none !important; }
+        .mobile-bottom-nav { display: flex !important; }
+      }
+      @media (min-width: 769px) {
+        .mobile-bottom-nav { display: none !important; }
+      }
     `;
     const el = document.createElement("style");
     el.textContent = css;
@@ -971,96 +993,126 @@ export default function AgentEmpire() {
   const accentColor = T[activeMeta?.color] || T.accent;
 
   return (
-    <div style={{ minHeight: "100vh", background: T.bg, display: "flex", flexDirection: "column" }}>
+    <div style={{ minHeight: "100vh", background: T.bg, display: "flex", flexDirection: "column", paddingBottom: isMobile ? 64 : 0 }}>
+
       {/* TOP NAV */}
-      <div style={{ height: 56, borderBottom: `1px solid ${T.border}`, background: T.bg2, display: "flex", alignItems: "center", padding: "0 20px", gap: 16, position: "sticky", top: 0, zIndex: 50, boxShadow: T.shadow }}>
-        <button onClick={() => setSidebarOpen(s => !s)} style={{ background: "none", border: "none", color: T.text2, cursor: "pointer", fontSize: 18, padding: 4 }}>☰</button>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 28, height: 28, borderRadius: 8, background: T.accentBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>⌘</div>
-          <span style={{ fontSize: 15, fontWeight: 700, color: T.text }}>Agent Empire</span>
+      <div style={{ height: 56, borderBottom: `1px solid ${T.border}`, background: T.bg2, display: "flex", alignItems: "center", padding: "0 16px", gap: 12, position: "sticky", top: 0, zIndex: 50, boxShadow: T.shadow }}>
+        {/* Hamburger */}
+        <button onClick={() => setSidebarOpen(s => !s)} style={{ background: "none", border: "none", color: T.text2, cursor: "pointer", fontSize: 18, padding: 4, flexShrink: 0 }}>☰</button>
+
+        {/* Logo */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <div style={{ width: 26, height: 26, borderRadius: 7, background: T.accentBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>⌘</div>
+          {!isMobile && <span style={{ fontSize: 15, fontWeight: 700, color: T.text }}>Agent Empire</span>}
         </div>
 
-        {/* Agent tabs — scrollable */}
-        <div style={{ flex: 1, display: "flex", gap: 2, overflowX: "auto", padding: "0 8px" }}>
-          {AGENTS_META.map(a => {
-            const c = T[a.color] || T.accent;
-            return (
-              <button key={a.id} onClick={() => setActive(a.id)} style={{
-                padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 500,
-                border: "none", background: active === a.id ? T[a.color + "Bg"] || T.accentBg : "transparent",
-                color: active === a.id ? c : T.text2, whiteSpace: "nowrap",
-                transition: "all 0.15s", fontFamily: "inherit",
-              }}>
-                {a.icon} {a.label}
-                {a.id === "publishing" && genContent && active !== "publishing" && (
-                  <span style={{ marginLeft: 6, background: T.blue, color: "#fff", borderRadius: 10, padding: "1px 6px", fontSize: 10 }}>New</span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+        {/* Desktop agent tabs */}
+        {!isMobile && (
+          <div style={{ flex: 1, display: "flex", gap: 2, overflowX: "auto", padding: "0 4px" }}>
+            {AGENTS_META.map(a => {
+              const c = T[a.color] || T.accent;
+              return (
+                <button key={a.id} onClick={() => setActive(a.id)} style={{
+                  padding: "6px 12px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 500,
+                  border: "none", background: active === a.id ? T[a.color + "Bg"] || T.accentBg : "transparent",
+                  color: active === a.id ? c : T.text2, whiteSpace: "nowrap",
+                  transition: "all 0.15s", fontFamily: "inherit",
+                }}>
+                  {a.icon} {a.label}
+                  {a.id === "publishing" && genContent && active !== "publishing" && (
+                    <span style={{ marginLeft: 5, background: T.blue, color: "#fff", borderRadius: 10, padding: "1px 5px", fontSize: 9 }}>New</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Mobile: current agent name */}
+        {isMobile && (
+          <div style={{ flex: 1, textAlign: "center" }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{activeMeta?.icon} {activeMeta?.label}</span>
+          </div>
+        )}
 
         {/* Right controls */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: backendStatus === "online" ? T.green : T.red }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: backendStatus === "online" ? T.green : T.red }}>
             <div style={{ width: 6, height: 6, borderRadius: "50%", background: backendStatus === "online" ? T.green : T.red }} />
-            {backendStatus === "online" ? "Live" : "Offline"}
+            {!isMobile && (backendStatus === "online" ? "Live" : "Offline")}
           </div>
-          <button onClick={() => setShowLog(s => !s)} style={{ padding: "5px 12px", borderRadius: 8, cursor: "pointer", fontSize: 12, border: `1px solid ${T.border2}`, background: showLog ? T.accentBg : "transparent", color: showLog ? T.accent : T.text2, fontFamily: "inherit" }}>Log</button>
-          <button onClick={() => setDarkMode(d => !d)} style={{ padding: "5px 10px", borderRadius: 8, cursor: "pointer", fontSize: 14, border: `1px solid ${T.border2}`, background: "transparent", color: T.text2 }}>{darkMode ? "☀️" : "🌙"}</button>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 10, borderLeft: `1px solid ${T.border}` }}>
-            <div style={{ width: 28, height: 28, borderRadius: "50%", background: T.accentBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: T.accent, fontWeight: 700 }}>{userEmail[0]?.toUpperCase()}</div>
-            <button onClick={handleLogout} style={{ fontSize: 12, color: T.text2, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>Sign out</button>
+          {!isMobile && <button onClick={() => setShowLog(s => !s)} style={{ padding: "5px 12px", borderRadius: 8, cursor: "pointer", fontSize: 12, border: `1px solid ${T.border2}`, background: showLog ? T.accentBg : "transparent", color: showLog ? T.accent : T.text2, fontFamily: "inherit" }}>Log</button>}
+          <button onClick={() => setDarkMode(d => !d)} style={{ padding: "5px 8px", borderRadius: 8, cursor: "pointer", fontSize: 14, border: `1px solid ${T.border2}`, background: "transparent", color: T.text2 }}>{darkMode ? "☀️" : "🌙"}</button>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, paddingLeft: 8, borderLeft: `1px solid ${T.border}` }}>
+            <div style={{ width: 26, height: 26, borderRadius: "50%", background: T.accentBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: T.accent, fontWeight: 700 }}>{userEmail[0]?.toUpperCase()}</div>
+            {!isMobile && <button onClick={handleLogout} style={{ fontSize: 12, color: T.text2, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>Sign out</button>}
           </div>
         </div>
       </div>
 
       {/* BODY */}
-      <div style={{ display: "flex", flex: 1 }}>
+      <div style={{ display: "flex", flex: 1, position: "relative" }}>
+
+        {/* SIDEBAR OVERLAY on mobile */}
+        {sidebarOpen && isMobile && (
+          <div className="mobile-sidebar-overlay" onClick={() => setSidebarOpen(false)} />
+        )}
+
         {/* SIDEBAR */}
         {sidebarOpen && (
-          <div style={{ width: 220, borderRight: `1px solid ${T.border}`, background: T.bg2, padding: "16px 12px", flexShrink: 0, overflowY: "auto" }}>
+          <div style={{
+            width: 220, borderRight: `1px solid ${T.border}`, background: T.bg2,
+            padding: "16px 12px", flexShrink: 0, overflowY: "auto",
+            position: isMobile ? "fixed" : "relative",
+            top: isMobile ? 56 : 0, left: 0,
+            height: isMobile ? "calc(100vh - 56px)" : "auto",
+            zIndex: isMobile ? 45 : 1,
+            boxShadow: isMobile ? T.shadow3 : "none",
+          }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: T.text2, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8, padding: "0 8px" }}>Agents</div>
             {AGENTS_META.map(a => {
               const c = T[a.color] || T.accent;
               return (
-                <button key={a.id} onClick={() => setActive(a.id)} style={{
-                  width: "100%", padding: "8px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left",
+                <button key={a.id} onClick={() => { setActive(a.id); if (isMobile) setSidebarOpen(false); }} style={{
+                  width: "100%", padding: "10px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left",
                   border: "none", background: active === a.id ? T[a.color + "Bg"] || T.accentBg : "transparent",
                   color: active === a.id ? c : T.text2, marginBottom: 2, display: "flex", alignItems: "center", gap: 10,
-                  transition: "all 0.15s", fontFamily: "inherit", fontSize: 13, fontWeight: active === a.id ? 600 : 400,
+                  transition: "all 0.15s", fontFamily: "inherit", fontSize: 14, fontWeight: active === a.id ? 600 : 400,
                 }}>
-                  <span style={{ fontSize: 14 }}>{a.icon}</span>
+                  <span style={{ fontSize: 16 }}>{a.icon}</span>
                   <span>{a.label}</span>
                   <span style={{ marginLeft: "auto", fontSize: 10, color: T.text3 }}>{a.num}</span>
                 </button>
               );
             })}
-
             <div style={{ height: 1, background: T.border, margin: "16px 8px" }} />
-
             <div style={{ fontSize: 11, fontWeight: 600, color: T.text2, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8, padding: "0 8px" }}>Settings</div>
-            <div style={{ padding: "8px 12px" }}>
+            <div style={{ padding: "4px 8px" }}>
               <div style={{ fontSize: 12, color: T.text2, marginBottom: 6 }}>Niche</div>
               <Input value={config.niche} onChange={v => setConfig(c => ({ ...c, niche: v }))} T={T} />
             </div>
+            {isMobile && (
+              <div style={{ padding: "16px 8px 0" }}>
+                <button onClick={handleLogout} style={{ fontSize: 13, color: T.red, background: T.redBg, border: `1px solid ${T.red}33`, padding: "8px 16px", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", width: "100%" }}>Sign out</button>
+              </div>
+            )}
           </div>
         )}
 
         {/* MAIN CONTENT */}
-        <div style={{ flex: 1, overflow: "auto", display: "flex" }}>
-          <div style={{ flex: 1, maxWidth: 760, margin: "0 auto", padding: 24 }}>
+        <div style={{ flex: 1, overflow: "auto", display: "flex", minWidth: 0 }}>
+          <div style={{ flex: 1, maxWidth: 760, margin: "0 auto", padding: isMobile ? "16px 12px" : "24px" }}>
             {/* Agent header */}
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: T[(activeMeta?.color || "accent") + "Bg"] || T.accentBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{activeMeta?.icon}</div>
-              <div>
-                <h1 style={{ fontSize: 18, fontWeight: 700, color: T.text, margin: 0 }}>{activeMeta?.label} Agent</h1>
-                <p style={{ fontSize: 13, color: T.text2, margin: 0 }}>Agent {activeMeta?.num} — {config.niche}</p>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: isMobile ? 16 : 24 }}>
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: T[(activeMeta?.color || "accent") + "Bg"] || T.accentBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{activeMeta?.icon}</div>
+              <div style={{ minWidth: 0 }}>
+                <h1 style={{ fontSize: isMobile ? 16 : 18, fontWeight: 700, color: T.text, margin: 0 }}>{activeMeta?.label} Agent</h1>
+                <p style={{ fontSize: 12, color: T.text2, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Agent {activeMeta?.num} — {config.niche}</p>
               </div>
               <Badge color={activeMeta?.color} T={T}>{activeMeta?.num}</Badge>
             </div>
 
-            {active === "cmd"        && <CommandAgent T={T} config={config} log={pushLog} allAgents={AGENTS_META} />}
+            {active === "cmd"        && <CommandAgent T={T} config={config} log={pushLog} allAgents={AGENTS_META} isMobile={isMobile} />}
             {active === "content"    && <ContentAgent T={T} config={config} log={pushLog} onGenerated={handleGenerated} />}
             {active === "publishing" && <PublishingAgent T={T} config={config} log={pushLog} incoming={genContent} incomingTopic={genTopic} />}
             {active === "research"   && <ResearchAgent T={T} config={config} log={pushLog} />}
@@ -1070,8 +1122,8 @@ export default function AgentEmpire() {
             {active === "fiverr"     && <FiverrAgent T={T} config={config} log={pushLog} />}
           </div>
 
-          {/* Activity log panel */}
-          {showLog && (
+          {/* Activity log panel — desktop only */}
+          {showLog && !isMobile && (
             <div style={{ width: 260, borderLeft: `1px solid ${T.border}`, background: T.bg2, flexShrink: 0, display: "flex", flexDirection: "column" }}>
               <div style={{ padding: "12px 16px", borderBottom: `1px solid ${T.border}`, fontSize: 13, fontWeight: 600, color: T.text }}>Activity Log</div>
               <div style={{ flex: 1, overflowY: "auto", padding: 12 }}>
@@ -1093,6 +1145,42 @@ export default function AgentEmpire() {
           )}
         </div>
       </div>
+
+      {/* MOBILE BOTTOM NAV */}
+      {isMobile && (
+        <div style={{
+          position: "fixed", bottom: 0, left: 0, right: 0, height: 64,
+          background: T.bg2, borderTop: `1px solid ${T.border}`,
+          display: "flex", alignItems: "center", justifyContent: "space-around",
+          padding: "0 4px", zIndex: 50, boxShadow: `0 -4px 12px rgba(0,0,0,0.1)`,
+        }}>
+          {AGENTS_META.slice(0, 5).map(a => {
+            const c = T[a.color] || T.accent;
+            const isActive = active === a.id;
+            return (
+              <button key={a.id} onClick={() => setActive(a.id)} style={{
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+                padding: "6px 8px", borderRadius: 10, border: "none", background: "transparent",
+                color: isActive ? c : T.text3, cursor: "pointer", minWidth: 48, flex: 1,
+                fontFamily: "inherit",
+              }}>
+                <span style={{ fontSize: 18 }}>{a.icon}</span>
+                <span style={{ fontSize: 9, fontWeight: isActive ? 700 : 400, color: isActive ? c : T.text3 }}>{a.label}</span>
+                {isActive && <div style={{ width: 4, height: 4, borderRadius: "50%", background: c }} />}
+              </button>
+            );
+          })}
+          {/* More button for remaining agents */}
+          <button onClick={() => setSidebarOpen(s => !s)} style={{
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+            padding: "6px 8px", borderRadius: 10, border: "none", background: "transparent",
+            color: T.text3, cursor: "pointer", minWidth: 48, flex: 1, fontFamily: "inherit",
+          }}>
+            <span style={{ fontSize: 18 }}>⋯</span>
+            <span style={{ fontSize: 9, fontWeight: 400 }}>More</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
