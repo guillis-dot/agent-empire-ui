@@ -2087,6 +2087,35 @@ export default function AgentEmpire() {
         </div>
       </div>
 
+      {/* PIPELINE STATUS BAR */}
+      <div style={{ borderBottom: `1px solid ${T.border}`, background: T.bg2, padding: "8px 20px", display: "flex", alignItems: "center", gap: 6, overflowX: "auto", flexShrink: 0 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: T.text3, textTransform: "uppercase", letterSpacing: 1, marginRight: 4, flexShrink: 0 }}>Pipeline</span>
+        {[
+          { label: "Research", hasData: !!researchData, color: "yellow", agentId: "research" },
+          { label: "Content", hasData: !!genContent, color: "purple", agentId: "content" },
+          { label: "Publishing", hasData: !!publishedContent, color: "blue", agentId: "publishing" },
+          { label: "Schedule", hasData: !!scheduleData, color: "green", agentId: "scheduler" },
+          { label: "Products", hasData: !!productResearchData, color: "green", agentId: "shopify" },
+          { label: "Dropship", hasData: !!dropshipData, color: "blue", agentId: "dropship" },
+          { label: "Store Copy", hasData: !!shopifyData.title, color: "orange", agentId: "storecopy" },
+          { label: "Shopify", hasData: !!shopifyData.source, color: "emerald", agentId: "shopify_mgr" },
+          { label: "Revenue", hasData: !!revenueData, color: "red", agentId: "revenue" },
+        ].map((p, i) => (
+          <div key={p.label} style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+            {i > 0 && <span style={{ color: T.border2, fontSize: 10 }}>→</span>}
+            <button onClick={() => setActive(p.agentId)} style={{
+              display: "flex", alignItems: "center", gap: 5, padding: "4px 8px",
+              borderRadius: 6, border: `1px solid ${p.hasData ? T[p.color] + "44" : T.border}`,
+              background: p.hasData ? T[p.color + "Bg"] : "transparent",
+              cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s",
+            }}>
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: p.hasData ? T[p.color] : T.border, flexShrink: 0 }} />
+              <span style={{ fontSize: 11, fontWeight: 600, color: p.hasData ? T[p.color] : T.text3, whiteSpace: "nowrap" }}>{p.label}</span>
+            </button>
+          </div>
+        ))}
+      </div>
+
       {/* BODY */}
       <div style={{ display: "flex", flex: 1, position: "relative" }}>
 
@@ -2244,4 +2273,3 @@ export default function AgentEmpire() {
     </div>
   );
 }
-v
