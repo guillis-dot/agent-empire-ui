@@ -124,6 +124,9 @@ const AGENTS_META = [
   { id: "revenue",    label: "Revenue",    icon: "💰",  color: "red",      num: "05" },
   { id: "etsy",       label: "Etsy",       icon: "🛍",  color: "orange",   num: "06" },
   { id: "fiverr",     label: "Fiverr",     icon: "💼",  color: "emerald",  num: "07" },
+  { id: "shopify",    label: "Products",   icon: "🛒",  color: "green",    num: "08" },
+  { id: "dropship",   label: "Dropship",   icon: "📦",  color: "blue",     num: "09" },
+  { id: "storecopy",  label: "Store Copy", icon: "✍",  color: "purple",   num: "10" },
 ];
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -143,13 +146,35 @@ function useCopy() {
   const copy = useCallback((text) => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); }, []);
   return [copied, copy];
 }
+async function saveLog(agentId, msg) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/activity_logs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Prefer": "return=minimal" },
+      body: JSON.stringify({ agent_id: agentId, message: msg }),
+    });
+  } catch (e) {}
+}
+async function loadLogs() {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/activity_logs?order=created_at.desc&limit=50`, {
+      headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
+    });
+    const data = await r.json();
+    return Array.isArray(data) ? data.map(d => ({ id: d.id, agentId: d.agent_id, msg: d.message, time: new Date(d.created_at).toLocaleTimeString("en", { hour12: false }) })) : [];
+  } catch (e) { return []; }
+}
 function useActivityLog() {
   const [log, setLog] = useState([]);
+  useEffect(() => { loadLogs().then(setLog); }, []);
   const push = useCallback((agentId, msg) => {
-    setLog(l => [{ id: Date.now(), agentId, msg, time: new Date().toLocaleTimeString("en", { hour12: false }) }, ...l.slice(0, 49)]);
+    const entry = { id: Date.now(), agentId, msg, time: new Date().toLocaleTimeString("en", { hour12: false }) };
+    setLog(l => [entry, ...l.slice(0, 49)]);
+    saveLog(agentId, msg);
   }, []);
   return [log, push];
 }
+
 
 // ─── UI PRIMITIVES ───────────────────────────────────────────────────────────
 function Card({ children, T, style }) {
@@ -282,6 +307,14 @@ async function supabaseGetUser(token) {
     headers: { "Authorization": `Bearer ${token}`, "apikey": SUPABASE_KEY },
   });
   return r.json();
+}
+async function supabaseSignOut(token) {
+  try {
+    await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token}`, "apikey": SUPABASE_KEY, "Content-Type": "application/json" },
+    });
+  } catch (e) {}
 }
 
 // ─── LOGIN PAGE ──────────────────────────────────────────────────────────────
@@ -913,6 +946,183 @@ function CommandAgent({ T, config, log, allAgents }) {
 }
 
 // ─── MAIN APP ────────────────────────────────────────────────────────────────
+
+// ─── AGENT 08: PRODUCT RESEARCH ──────────────────────────────────────────────
+function ShopifyProductAgent({ T, config, log }) {
+  const CATEGORIES = [
+    { id: "trending", label: "Trending Now" }, { id: "evergreen", label: "Evergreen Winners" },
+    { id: "seasonal", label: "Seasonal Picks" }, { id: "ai", label: "AI & Tech Products" },
+    { id: "home", label: "Home & Living" }, { id: "fitness", label: "Health & Fitness" },
+  ];
+  const MARGINS = [
+    { id: "any", label: "Any Margin" }, { id: "30", label: "30%+ Margin" },
+    { id: "50", label: "50%+ Margin" }, { id: "70", label: "70%+ Margin" },
+  ];
+  const [category, setCategory] = useState("trending");
+  const [margin, setMargin] = useState("50");
+  const [budget, setBudget] = useState("low");
+  const [niche, setNiche] = useState(config.niche || "AI & Tech");
+  const [loading, setLoading] = useState(false);
+  const [out, setOut] = useState("");
+
+  const research = async () => {
+    setLoading(true); setOut("");
+    log("shopify", `Researching ${category} products with ${margin}% margin...`);
+    const budgetMap = { low: "under $20 sourcing cost", mid: "$20-$50 sourcing cost", high: "$50-$100 sourcing cost" };
+    const result = await callClaude(`You are a dropshipping product research expert. Find 8 winning dropshipping products for a ${category} store in the "${niche}" space.
+
+Requirements:
+- Sourcing cost: ${budgetMap[budget]}
+- Minimum profit margin: ${margin}%
+- Must be shippable via AliExpress or CJ Dropshipping
+
+For EACH product provide:
+PRODUCT: [name]
+SOURCING PRICE: [$X from AliExpress/CJ]
+SELL PRICE: [$X recommended retail]
+PROFIT MARGIN: [X%]
+PROFIT PER SALE: [$X]
+WHY IT WINS: [2 sentences — why this product sells]
+TARGET AUDIENCE: [who buys this]
+BEST AD PLATFORM: [TikTok/Instagram/Facebook/Google]
+SUPPLIER SEARCH TERM: [exact term to search on AliExpress]
+COMPETITION LEVEL: [Low/Medium/High]
+PRODUCT SCORE: [X/10]
+
+Sort by Product Score highest to lowest. Be specific with real product examples.`).catch(() => "Error.");
+    setOut(result);
+    log("shopify", `Product research complete — 8 products analyzed`);
+    setLoading(false);
+  };
+
+  return (
+    <div>
+      <LoadingBar loading={loading} color="green" T={T} />
+      <Card T={T}><Label T={T}>Product Category</Label><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{CATEGORIES.map(c => <Chip key={c.id} label={c.label} active={category === c.id} onClick={() => setCategory(c.id)} color="green" T={T} />)}</div></Card>
+      <Card T={T}><Label T={T}>Minimum Profit Margin</Label><div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{MARGINS.map(m => <Chip key={m.id} label={m.label} active={margin === m.id} onClick={() => setMargin(m.id)} color="green" T={T} />)}</div></Card>
+      <Card T={T}>
+        <Label T={T}>Sourcing Budget</Label>
+        <div style={{ display: "flex", gap: 8 }}>
+          {[["low","Low (under $20)"],["mid","Mid ($20-$50)"],["high","High ($50-$100)"]].map(([id,lbl]) => <Chip key={id} label={lbl} active={budget === id} onClick={() => setBudget(id)} color="green" T={T} />)}
+        </div>
+      </Card>
+      <Card T={T}><Label T={T}>Niche / Focus</Label><Input value={niche} onChange={setNiche} placeholder="e.g. AI & Tech, Home Office, Fitness..." T={T} /></Card>
+      <Btn onClick={research} disabled={loading} variant="success" T={T}>{loading ? "Researching products..." : "🛒 Find Winning Products"}</Btn>
+      <OutputBox text={out} label="Product Research Report" color="green" T={T} />
+    </div>
+  );
+}
+
+// ─── AGENT 09: DROPSHIP OPERATIONS ───────────────────────────────────────────
+function DropshipAgent({ T, config, log }) {
+  const OUTPUT_TYPES = [
+    { id: "supplier", label: "Find Supplier" }, { id: "margins", label: "Calculate Margins" },
+    { id: "outreach", label: "Supplier Outreach" }, { id: "fulfillment", label: "Fulfillment Plan" },
+  ];
+  const [outputType, setOutputType] = useState("supplier");
+  const [productName, setProductName] = useState("");
+  const [sourcePrice, setSourcePrice] = useState("");
+  const [sellPrice, setSellPrice] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [out, setOut] = useState("");
+
+  const run = async () => {
+    if (!productName.trim()) return;
+    setLoading(true); setOut("");
+    log("dropship", `Running ${outputType} for "${productName}"...`);
+
+    const prompts = {
+      supplier: `You are a dropshipping sourcing expert. Find the best suppliers for "${productName}" for a Shopify dropshipping store.\n\nProvide:\n1. TOP 3 ALIEXPRESS SUPPLIERS — search terms, what to look for, red flags to avoid\n2. CJ DROPSHIPPING — how to find this product, what to look for\n3. ZENDROP — is this product available, alternatives\n4. QUALITY CHECKLIST — 5 things to verify before ordering samples\n5. SAMPLE ORDER STRATEGY — how to test before scaling\n6. NEGOTIATION TIPS — how to get better pricing at volume`,
+      margins: `Calculate complete profit margins for a Shopify dropshipping store selling "${productName}".\n\nSource price: $${sourcePrice || "unknown — estimate"}\nSell price: $${sellPrice || "unknown — recommend"}\n\nCalculate:\n1. RECOMMENDED SELL PRICE — based on market research\n2. GROSS MARGIN — after product cost\n3. SHOPIFY FEES — transaction + subscription per unit\n4. SHIPPING COST — estimate for US delivery\n5. AD COST ESTIMATE — typical CAC for this product type\n6. NET PROFIT PER SALE — real take-home\n7. BREAK EVEN POINT — units needed per month\n8. MONTHLY REVENUE TARGETS — at 10, 50, 100 sales/day\n9. VERDICT — is this worth selling? Why?`,
+      outreach: `Write a professional supplier outreach message for "${productName}" on AliExpress/Alibaba.\n\nWrite 2 versions:\n\nVERSION 1 — INITIAL CONTACT:\n[Professional message introducing yourself, asking about MOQ, pricing tiers, shipping times, customization options, and sample policy. 150 words max.]\n\nVERSION 2 — NEGOTIATION (after initial contact):\n[Follow-up message negotiating better pricing, faster shipping, or custom packaging. Reference being a serious buyer. 100 words max.]`,
+      fulfillment: `Create a complete fulfillment operations plan for a Shopify dropshipping store selling "${productName}".\n\nInclude:\n1. ORDER PROCESSING FLOW — step by step from customer order to delivery\n2. SHIPPING TIMELINE — realistic expectations for US customers\n3. TRACKING SETUP — how to provide tracking to customers\n4. RETURN POLICY — recommended policy for dropshipping\n5. CUSTOMER SERVICE TEMPLATES — 3 email templates (order confirm, shipping update, delivery confirm)\n6. PROBLEM SCENARIOS — what to do when: item lost, customer unhappy, wrong item sent\n7. AUTOMATION TOOLS — apps to automate fulfillment on Shopify`,
+    };
+
+    const result = await callClaude(prompts[outputType]).catch(() => "Error.");
+    setOut(result);
+    log("dropship", `${outputType} complete for "${productName}"`);
+    setLoading(false);
+  };
+
+  return (
+    <div>
+      <LoadingBar loading={loading} color="blue" T={T} />
+      <Card T={T}><Label T={T}>Operation Type</Label><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{OUTPUT_TYPES.map(o => <Chip key={o.id} label={o.label} active={outputType === o.id} onClick={() => setOutputType(o.id)} color="blue" T={T} />)}</div></Card>
+      <Card T={T}>
+        <Label T={T}>Product Name</Label>
+        <Input value={productName} onChange={setProductName} placeholder="e.g. LED Desk Lamp with Wireless Charger" T={T} />
+        {outputType === "margins" && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
+            <div><div style={{ fontSize: 12, color: T.text2, marginBottom: 5 }}>Source Price ($)</div><Input value={sourcePrice} onChange={setSourcePrice} placeholder="e.g. 8.50" T={T} /></div>
+            <div><div style={{ fontSize: 12, color: T.text2, marginBottom: 5 }}>Sell Price ($)</div><Input value={sellPrice} onChange={setSellPrice} placeholder="e.g. 34.99" T={T} /></div>
+          </div>
+        )}
+      </Card>
+      <Btn onClick={run} disabled={loading || !productName.trim()} variant="blue" T={T}>{loading ? "Running..." : "📦 Execute Dropship Agent"}</Btn>
+      <OutputBox text={out} label="Dropship Operations" color="blue" T={T} />
+    </div>
+  );
+}
+
+// ─── AGENT 10: STORE COPY ────────────────────────────────────────────────────
+function StoreCopyAgent({ T, config, log }) {
+  const COPY_TYPES = [
+    { id: "product", label: "Product Listing" }, { id: "ads", label: "Ad Copy" },
+    { id: "email", label: "Email Sequence" }, { id: "homepage", label: "Homepage Copy" },
+    { id: "collection", label: "Collection Page" }, { id: "abandon", label: "Abandoned Cart" },
+  ];
+  const [copyType, setCopyType] = useState("product");
+  const [productName, setProductName] = useState("");
+  const [productBenefits, setProductBenefits] = useState("");
+  const [targetAudience, setTargetAudience] = useState("");
+  const [price, setPrice] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [out, setOut] = useState("");
+
+  const generate = async () => {
+    if (!productName.trim()) return;
+    setLoading(true); setOut("");
+    log("storecopy", `Generating ${copyType} copy for "${productName}"...`);
+
+    const prompts = {
+      product: `Write a complete Shopify product listing for "${productName}" priced at $${price || "TBD"}.\n\nTarget audience: ${targetAudience || "general consumer"}\nKey benefits: ${productBenefits || "not specified — infer from product name"}\n\nProvide:\nPRODUCT TITLE: [SEO-optimized, benefit-driven, max 70 chars]\nSHORT DESCRIPTION: [2-sentence hook for above the fold, benefit-focused]\nFULL DESCRIPTION:\n[HTML-friendly description with: hook paragraph, 5 bullet benefits, how it works, who it's for, guarantee/risk reversal, CTA]\nSEO META TITLE: [max 60 chars]\nSEO META DESCRIPTION: [max 160 chars]\nALT TEXT: [for product image]\nTAGS: [10 Shopify tags]`,
+
+      ads: `Write complete ad copy for "${productName}" priced at $${price || "TBD"} for a Shopify dropshipping store.\n\nTarget: ${targetAudience || "general consumer"}\nBenefits: ${productBenefits || "infer from product"}\n\nWrite:\nTIKTOK AD SCRIPT (30 seconds):\n[Hook + Problem + Solution + CTA]\n\nFACEBOOK/INSTAGRAM AD:\nHeadline: [max 40 chars]\nPrimary text: [125 chars]\nDescription: [max 30 chars]\n\nGOOGLE AD:\nHeadline 1-3: [30 chars each]\nDescription 1-2: [90 chars each]\n\nEMAIL SUBJECT LINES: [5 options for promotional email]`,
+
+      email: `Write a 3-email welcome sequence for customers who buy "${productName}" from a Shopify store.\n\nEMAIL 1 — ORDER CONFIRMATION (sent immediately):\nSubject: [exciting, confirms order]\nBody: [thank you, order details, what to expect, support info]\n\nEMAIL 2 — SHIPPING UPDATE (sent when shipped):\nSubject: [creates excitement]\nBody: [shipping confirmed, tracking, build anticipation]\n\nEMAIL 3 — DELIVERY + UPSELL (sent after delivery):\nSubject: [check-in]\nBody: [hope they love it, ask for review, suggest related product, discount code for next order]`,
+
+      homepage: `Write complete homepage copy for a Shopify dropshipping store selling "${productName}" and similar products.\n\nHERO SECTION:\nHeadline: [bold, benefit-driven, max 8 words]\nSubheadline: [expands on headline, max 15 words]\nCTA Button: [action text]\n\nTRUST BAR: [5 trust signals — shipping, returns, guarantee, reviews, security]\n\nFEATURED SECTION HEADLINE: [for product showcase]\n\nABOUT US: [3 sentences — brand story, mission, why choose us]\n\nFAQ SECTION: [5 common questions and answers]\n\nFOOTER TAGLINE: [memorable, max 10 words]`,
+
+      collection: `Write collection page copy for a Shopify store. Collection: "${productName || "Best Sellers"}"\n\nCOLLECTION TITLE: [SEO friendly]\nCOLLECTION DESCRIPTION: [150 words — what's in this collection, who it's for, key benefits, buying guide]\nSEO META TITLE: [max 60 chars]\nSEO META DESCRIPTION: [max 160 chars]\nFILTER SUGGESTIONS: [5 filter options to add]\nSORTING RECOMMENDATION: [default sort order and why]`,
+
+      abandon: `Write a 3-message abandoned cart recovery sequence for a Shopify store selling "${productName}" at $${price || "TBD"}.\n\nMESSAGE 1 — EMAIL (1 hour after abandon):\nSubject: [gentle reminder, no discount]\nBody: [friendly reminder, what they left, easy return to cart]\n\nMESSAGE 2 — EMAIL (24 hours after abandon):\nSubject: [create urgency]\nBody: [remind of benefits, add social proof, offer 10% discount]\n\nMESSAGE 3 — SMS (48 hours after abandon):\n[Short, punchy, include link, max 160 chars, include 15% final offer]`,
+    };
+
+    const result = await callClaude(prompts[copyType]).catch(() => "Error.");
+    setOut(result);
+    log("storecopy", `${copyType} copy generated for "${productName}"`);
+    setLoading(false);
+  };
+
+  return (
+    <div>
+      <LoadingBar loading={loading} color="purple" T={T} />
+      <Card T={T}><Label T={T}>Copy Type</Label><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{COPY_TYPES.map(c => <Chip key={c.id} label={c.label} active={copyType === c.id} onClick={() => setCopyType(c.id)} color="purple" T={T} />)}</div></Card>
+      <Card T={T}>
+        <Label T={T}>Product Details</Label>
+        <div style={{ display: "grid", gap: 10 }}>
+          <div><div style={{ fontSize: 12, color: T.text2, marginBottom: 5 }}>Product Name *</div><Input value={productName} onChange={setProductName} placeholder="e.g. Magnetic Phone Mount with Wireless Charging" T={T} /></div>
+          {["product","ads","email","abandon"].includes(copyType) && <div><div style={{ fontSize: 12, color: T.text2, marginBottom: 5 }}>Price ($)</div><Input value={price} onChange={setPrice} placeholder="e.g. 29.99" T={T} /></div>}
+          <div><div style={{ fontSize: 12, color: T.text2, marginBottom: 5 }}>Target Audience</div><Input value={targetAudience} onChange={setTargetAudience} placeholder="e.g. Remote workers, car enthusiasts, busy moms..." T={T} /></div>
+          <div><div style={{ fontSize: 12, color: T.text2, marginBottom: 5 }}>Key Benefits</div><Input value={productBenefits} onChange={setProductBenefits} placeholder="e.g. saves time, wireless, fast charging, universal fit..." T={T} /></div>
+        </div>
+      </Card>
+      <Btn onClick={generate} disabled={loading || !productName.trim()} variant="purple" T={T}>{loading ? "Writing copy..." : "✍ Generate Store Copy"}</Btn>
+      <OutputBox text={out} label="Store Copy Output" color="purple" T={T} />
+    </div>
+  );
+}
+
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth < 768);
   useEffect(() => {
@@ -984,7 +1194,14 @@ export default function AgentEmpire() {
   }, []);
 
   const handleLogin = (token, email) => { setSession(token); setUserEmail(email); };
-  const handleLogout = () => { localStorage.removeItem("ae_token"); localStorage.removeItem("ae_email"); setSession(null); setUserEmail(""); };
+  const handleLogout = async () => {
+    const token = session;
+    localStorage.removeItem("ae_token");
+    localStorage.removeItem("ae_email");
+    setSession(null);
+    setUserEmail("");
+    await supabaseSignOut(token);
+  };
   const handleGenerated = useCallback((content, topic) => { setGenContent(content); setGenTopic(topic); }, []);
 
   if (!session) return <LoginPage T={T} darkMode={darkMode} setDarkMode={setDarkMode} onLogin={handleLogin} />;
@@ -1120,6 +1337,9 @@ export default function AgentEmpire() {
             {active === "revenue"    && <RevenueAgent T={T} config={config} log={pushLog} />}
             {active === "etsy"       && <EtsyAgent T={T} config={config} log={pushLog} />}
             {active === "fiverr"     && <FiverrAgent T={T} config={config} log={pushLog} />}
+            {active === "shopify"    && <ShopifyProductAgent T={T} config={config} log={pushLog} />}
+            {active === "dropship"   && <DropshipAgent T={T} config={config} log={pushLog} />}
+            {active === "storecopy"  && <StoreCopyAgent T={T} config={config} log={pushLog} />}
           </div>
 
           {/* Activity log panel — desktop only */}
