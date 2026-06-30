@@ -127,6 +127,7 @@ const AGENTS_META = [
   { id: "shopify",    label: "Products",   icon: "🛒",  color: "green",    num: "08" },
   { id: "dropship",   label: "Dropship",   icon: "📦",  color: "blue",     num: "09" },
   { id: "storecopy",  label: "Store Copy", icon: "✍",  color: "purple",   num: "10" },
+  { id: "logs",       label: "Logs",       icon: "📋",  color: "accent",   num: "—"  },
 ];
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -1123,6 +1124,138 @@ function StoreCopyAgent({ T, config, log }) {
   );
 }
 
+
+// ─── LOGS PAGE ───────────────────────────────────────────────────────────────
+function LogsPage({ T, allAgents }) {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const PER_PAGE = 25;
+
+  const fetchLogs = async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(
+        `${SUPABASE_URL}/rest/v1/activity_logs?order=created_at.desc&limit=200`,
+        { headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` } }
+      );
+      const data = await r.json();
+      setLogs(Array.isArray(data) ? data : []);
+    } catch (e) { setLogs([]); }
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchLogs(); }, []);
+
+  const filtered = logs.filter(l => {
+    const matchAgent = filter === "all" || l.agent_id === filter;
+    const matchSearch = !search || l.message?.toLowerCase().includes(search.toLowerCase()) || l.agent_id?.toLowerCase().includes(search.toLowerCase());
+    return matchAgent && matchSearch;
+  });
+
+  const paginated = filtered.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
+  const totalPages = Math.ceil(filtered.length / PER_PAGE);
+
+  const agentColors = Object.fromEntries(allAgents.map(a => [a.id, a.color]));
+
+  const clearLogs = async () => {
+    if (!window.confirm("Clear all logs? This cannot be undone.")) return;
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/activity_logs?id=gte.0`, {
+        method: "DELETE",
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
+      });
+      setLogs([]);
+    } catch (e) {}
+  };
+
+  return (
+    <div>
+      {/* Stats row */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+        {[
+          { label: "Total Logs", value: logs.length, color: "accent" },
+          { label: "Today", value: logs.filter(l => new Date(l.created_at).toDateString() === new Date().toDateString()).length, color: "green" },
+          { label: "Agents Active", value: new Set(logs.map(l => l.agent_id)).size, color: "purple" },
+          { label: "Filtered", value: filtered.length, color: "blue" },
+        ].map(s => (
+          <div key={s.label} style={{ flex: 1, padding: "14px 16px", borderRadius: 10, background: T[(s.color) + "Bg"] || T.bg2, border: `1px solid ${T[s.color]}22` }}>
+            <div style={{ fontSize: 11, color: T.text2, marginBottom: 4 }}>{s.label}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: T[s.color] }}>{s.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <Card T={T} style={{ padding: "12px 16px" }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <input value={search} onChange={e => { setSearch(e.target.value); setPage(0); }}
+            placeholder="Search logs..."
+            style={{ flex: 1, minWidth: 180, padding: "8px 12px", borderRadius: 8, border: `1px solid ${T.border2}`, background: T.bg, color: T.text, fontSize: 13, outline: "none", fontFamily: "inherit" }} />
+          <button onClick={fetchLogs} style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: T.bg3, color: T.text2, cursor: "pointer", fontSize: 13, fontFamily: "inherit" }}>↻ Refresh</button>
+          <button onClick={clearLogs} style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${T.red}44`, background: T.redBg, color: T.red, cursor: "pointer", fontSize: 13, fontFamily: "inherit" }}>Clear All</button>
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+          <button onClick={() => { setFilter("all"); setPage(0); }} style={{ padding: "5px 12px", borderRadius: 20, border: `1px solid ${filter === "all" ? T.accent : T.border}`, background: filter === "all" ? T.accentBg : "transparent", color: filter === "all" ? T.accent : T.text2, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>All</button>
+          {allAgents.filter(a => a.id !== "logs").map(a => {
+            const c = T[a.color] || T.accent;
+            const isActive = filter === a.id;
+            const count = logs.filter(l => l.agent_id === a.id).length;
+            if (count === 0) return null;
+            return (
+              <button key={a.id} onClick={() => { setFilter(a.id); setPage(0); }} style={{ padding: "5px 12px", borderRadius: 20, border: `1px solid ${isActive ? c : T.border}`, background: isActive ? T[(a.color) + "Bg"] || T.accentBg : "transparent", color: isActive ? c : T.text2, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>
+                {a.icon} {a.label} ({count})
+              </button>
+            );
+          })}
+        </div>
+      </Card>
+
+      {/* Log table */}
+      <div style={{ borderRadius: 10, border: `1px solid ${T.border}`, overflow: "hidden", background: T.bg2 }}>
+        {/* Header */}
+        <div style={{ display: "grid", gridTemplateColumns: "120px 80px 1fr", gap: 0, padding: "10px 16px", borderBottom: `1px solid ${T.border}`, background: T.bg3 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: T.text2, textTransform: "uppercase", letterSpacing: 0.8 }}>Time</span>
+          <span style={{ fontSize: 11, fontWeight: 600, color: T.text2, textTransform: "uppercase", letterSpacing: 0.8 }}>Agent</span>
+          <span style={{ fontSize: 11, fontWeight: 600, color: T.text2, textTransform: "uppercase", letterSpacing: 0.8 }}>Activity</span>
+        </div>
+
+        {loading && <div style={{ padding: 32, textAlign: "center", color: T.text2, fontSize: 14 }}>Loading logs...</div>}
+        {!loading && paginated.length === 0 && <div style={{ padding: 32, textAlign: "center", color: T.text2, fontSize: 14 }}>No logs found{search ? ` for "${search}"` : ""}</div>}
+        {!loading && paginated.map((log, i) => {
+          const agent = allAgents.find(a => a.id === log.agent_id);
+          const c = T[agent?.color] || T.text2;
+          const date = new Date(log.created_at);
+          return (
+            <div key={log.id} style={{ display: "grid", gridTemplateColumns: "120px 80px 1fr", gap: 0, padding: "12px 16px", borderBottom: i < paginated.length - 1 ? `1px solid ${T.border}` : "none", background: i % 2 === 0 ? T.bg2 : T.bg, alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: 12, color: T.text, fontWeight: 500 }}>{date.toLocaleTimeString("en", { hour: "2-digit", minute: "2-digit" })}</div>
+                <div style={{ fontSize: 10, color: T.text3 }}>{date.toLocaleDateString("en", { month: "short", day: "numeric" })}</div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <span style={{ fontSize: 14 }}>{agent?.icon || "◈"}</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: c }}>{agent?.label || log.agent_id}</span>
+              </div>
+              <div style={{ fontSize: 13, color: T.text, lineHeight: 1.4 }}>{log.message}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 16, alignItems: "center" }}>
+          <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} style={{ padding: "7px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: T.bg2, color: page === 0 ? T.text3 : T.text, cursor: page === 0 ? "not-allowed" : "pointer", fontFamily: "inherit", fontSize: 13 }}>← Prev</button>
+          <span style={{ fontSize: 13, color: T.text2 }}>Page {page + 1} of {totalPages} ({filtered.length} entries)</span>
+          <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} style={{ padding: "7px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: T.bg2, color: page >= totalPages - 1 ? T.text3 : T.text, cursor: page >= totalPages - 1 ? "not-allowed" : "pointer", fontFamily: "inherit", fontSize: 13 }}>Next →</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth < 768);
   useEffect(() => {
@@ -1340,6 +1473,7 @@ export default function AgentEmpire() {
             {active === "shopify"    && <ShopifyProductAgent T={T} config={config} log={pushLog} />}
             {active === "dropship"   && <DropshipAgent T={T} config={config} log={pushLog} />}
             {active === "storecopy"  && <StoreCopyAgent T={T} config={config} log={pushLog} />}
+            {active === "logs"       && <LogsPage T={T} allAgents={AGENTS_META} />}
           </div>
 
           {/* Activity log panel — desktop only */}
