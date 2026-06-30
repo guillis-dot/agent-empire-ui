@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 const BACKEND = "https://agent-empire-backend-production.up.railway.app";
 const SUPABASE_URL = "https://ewahhppqyoqaewoxwspj.supabase.co";
 const SUPABASE_KEY = "sb_publishable_dskneAba0v6z-PXVao4iNQ_M_WLz5VJ";
-const ALLOWED_EMAIL = "guillaumettechris@gmail.com"; // Set your email here after first login
+const ALLOWED_EMAIL = ""; // Set your email here after first login
 
 // ─── DESIGN TOKENS ───────────────────────────────────────────────────────────
 const light = {
@@ -441,9 +441,9 @@ function ContentAgent({ T, config, log, onGenerated, incomingTopic }) {
   useEffect(() => {
     if (incomingTopic) {
       const firstLine = incomingTopic.split("\n").find(l => l.trim().length > 10);
-      if (firstLine) setCustom(firstLine.replace(/^[\d\.\-\*#]+/, "").trim().slice(0, 100));
+      if (firstLine) setCustom(firstLine.replace(/^[\d.\-*#]+/, "").trim().slice(0, 100));
     }
-  }, [incomingTopic]);
+  }, [incomingTopic?.slice(0, 50)]);
 
   const generate = async () => {
     setLoading(true); setOut("");
@@ -1107,13 +1107,13 @@ function DropshipAgent({ T, config, log, incomingProduct, onDropshipDone }) {
     setLoading(false);
   };
 
-  // Auto-fill product name from Product Research
+  // Auto-fill product name from Product Research (use slice as stable dep)
   useEffect(() => {
     if (incomingProduct) {
       const firstProduct = incomingProduct.split("\n").find(l => l.includes("PRODUCT:"));
       if (firstProduct) setProductName(firstProduct.replace("PRODUCT:", "").replace(/[*#]/g,"").trim().slice(0,80));
     }
-  }, [incomingProduct]);
+  }, [incomingProduct?.slice(0, 50)]);
 
   return (
     <div>
@@ -1604,18 +1604,17 @@ function ShopifyManagerAgent({ T, config, log, incomingData }) {
   // Auto-fill when incoming data arrives from Store Copy Agent
   useEffect(() => {
     if (incomingData?.source) {
-      setTitle(incomingData.title || "");
-      setDescription(incomingData.description || "");
-      setPrice(incomingData.price || "");
-      setComparePrice(incomingData.comparePrice || "");
-      setCost(incomingData.cost || "");
-      setTags(incomingData.tags || "");
-      setSeoTitle(incomingData.seoTitle || "");
-      setSeoDesc(incomingData.seoDesc || "");
+      setTitle(prev => incomingData.title || prev);
+      setDescription(prev => incomingData.description || prev);
+      setPrice(prev => incomingData.price || prev);
+      setComparePrice(prev => incomingData.comparePrice || prev);
+      setCost(prev => incomingData.cost || prev);
+      setTags(prev => incomingData.tags || prev);
+      setSeoTitle(prev => incomingData.seoTitle || prev);
+      setSeoDesc(prev => incomingData.seoDesc || prev);
       setPushResult(null);
-      setTab("push");
     }
-  }, [incomingData]);
+  }, [incomingData?.source]);
 
   // Customer Q&A
   const [customerQ, setCustomerQ] = useState("");
@@ -1653,13 +1652,20 @@ function ShopifyManagerAgent({ T, config, log, incomingData }) {
 
   const fetchStats = async () => {
     try {
-      const r = await fetch(`${BACKEND}/api/shopify/stats`);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      const r = await fetch(`${BACKEND}/api/shopify/stats`, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (!r.ok) return;
       const d = await r.json();
-      setStats(d);
-    } catch (e) {}
+      if (d && typeof d.productCount !== "undefined") setStats(d);
+    } catch (e) { /* Silently fail — Shopify API might not be ready */ }
   };
 
-  useEffect(() => { fetchStats(); }, []);
+  useEffect(() => { 
+    const timer = setTimeout(fetchStats, 500); // Small delay to prevent flash on mount
+    return () => clearTimeout(timer);
+  }, []);
   useEffect(() => {
     if (tab === "products") fetchProducts();
     if (tab === "orders") fetchOrders();
@@ -2238,3 +2244,4 @@ export default function AgentEmpire() {
     </div>
   );
 }
+v
