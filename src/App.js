@@ -148,31 +148,59 @@ function useCopy() {
   const copy = useCallback((text) => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); }, []);
   return [copied, copy];
 }
-async function saveLog(agentId, msg) {
+async function saveLog(agentId, msg, detail = "", inputData = "", outputData = "", status = "success", startTime = null) {
   try {
+    const duration_ms = startTime ? Date.now() - startTime : null;
     await fetch(`${SUPABASE_URL}/rest/v1/activity_logs`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Prefer": "return=minimal" },
-      body: JSON.stringify({ agent_id: agentId, message: msg }),
+      body: JSON.stringify({ 
+        agent_id: agentId, 
+        message: msg,
+        detail: detail || msg,
+        input_data: inputData ? inputData.slice(0, 2000) : "",
+        output_data: outputData ? outputData.slice(0, 2000) : "",
+        duration_ms,
+        status,
+      }),
     });
   } catch (e) {}
 }
 async function loadLogs() {
   try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/activity_logs?order=created_at.desc&limit=50`, {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/activity_logs?order=created_at.desc&limit=200`, {
       headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
     });
     const data = await r.json();
-    return Array.isArray(data) ? data.map(d => ({ id: d.id, agentId: d.agent_id, msg: d.message, time: new Date(d.created_at).toLocaleTimeString("en", { hour12: false }) })) : [];
+    return Array.isArray(data) ? data.map(d => ({ 
+      id: d.id, 
+      agentId: d.agent_id, 
+      msg: d.message,
+      detail: d.detail || d.message,
+      inputData: d.input_data || "",
+      outputData: d.output_data || "",
+      durationMs: d.duration_ms,
+      status: d.status || "success",
+      time: new Date(d.created_at).toLocaleTimeString("en", { hour12: false }),
+      date: new Date(d.created_at).toLocaleDateString("en", { month: "short", day: "numeric", year: "numeric" }),
+      timestamp: d.created_at,
+    })) : [];
   } catch (e) { return []; }
 }
 function useActivityLog() {
   const [log, setLog] = useState([]);
   useEffect(() => { loadLogs().then(setLog); }, []);
-  const push = useCallback((agentId, msg) => {
-    const entry = { id: Date.now(), agentId, msg, time: new Date().toLocaleTimeString("en", { hour12: false }) };
-    setLog(l => [entry, ...l.slice(0, 49)]);
-    saveLog(agentId, msg);
+  const push = useCallback((agentId, msg, detail = "", inputData = "", outputData = "", status = "success", startTime = null) => {
+    const entry = { 
+      id: Date.now(), agentId, msg, detail: detail || msg,
+      inputData, outputData, status,
+      time: new Date().toLocaleTimeString("en", { hour12: false }),
+      date: new Date().toLocaleDateString("en", { month: "short", day: "numeric", year: "numeric" }),
+      timestamp: new Date().toISOString(),
+      durationMs: startTime ? Date.now() - startTime : null,
+    };
+    setLog(l => [entry, ...l.slice(0, 199)]);
+    saveLog(agentId, msg, detail, inputData, outputData, status, startTime);
   }, []);
   return [log, push];
 }
@@ -1131,9 +1159,13 @@ function LogsPage({ T, allAgents }) {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
-  const PER_PAGE = 25;
+  const [selectedLog, setSelectedLog] = useState(null);
+  const [agentMemory, setAgentMemory] = useState("");
+  const [memoryLoading, setMemoryLoading] = useState(false);
+  const PER_PAGE = 20;
 
   const fetchLogs = async () => {
     setLoading(true);
@@ -1143,7 +1175,19 @@ function LogsPage({ T, allAgents }) {
         { headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` } }
       );
       const data = await r.json();
-      setLogs(Array.isArray(data) ? data : []);
+      setLogs(Array.isArray(data) ? data.map(d => ({
+        id: d.id,
+        agentId: d.agent_id,
+        msg: d.message,
+        detail: d.detail || d.message,
+        inputData: d.input_data || "",
+        outputData: d.output_data || "",
+        durationMs: d.duration_ms,
+        status: d.status || "success",
+        time: new Date(d.created_at).toLocaleTimeString("en", { hour12: false }),
+        date: new Date(d.created_at).toLocaleDateString("en", { month: "short", day: "numeric", year: "numeric" }),
+        timestamp: d.created_at,
+      })) : []);
     } catch (e) { setLogs([]); }
     setLoading(false);
   };
@@ -1151,15 +1195,48 @@ function LogsPage({ T, allAgents }) {
   useEffect(() => { fetchLogs(); }, []);
 
   const filtered = logs.filter(l => {
-    const matchAgent = filter === "all" || l.agent_id === filter;
-    const matchSearch = !search || l.message?.toLowerCase().includes(search.toLowerCase()) || l.agent_id?.toLowerCase().includes(search.toLowerCase());
-    return matchAgent && matchSearch;
+    const matchAgent = filter === "all" || l.agentId === filter;
+    const matchStatus = statusFilter === "all" || l.status === statusFilter;
+    const matchSearch = !search || l.msg?.toLowerCase().includes(search.toLowerCase()) || l.detail?.toLowerCase().includes(search.toLowerCase()) || l.agentId?.toLowerCase().includes(search.toLowerCase());
+    return matchAgent && matchStatus && matchSearch;
   });
 
   const paginated = filtered.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
 
-  const agentColors = Object.fromEntries(allAgents.map(a => [a.id, a.color]));
+  const generateMemory = async (log) => {
+    setMemoryLoading(true);
+    const agent = allAgents.find(a => a.id === log.agentId);
+    const result = await callClaude(`You are analyzing a task log entry for an AI agent system called Apex Empire.
+
+Agent: ${agent?.label || log.agentId}
+Task: ${log.msg}
+Detail: ${log.detail}
+Input: ${log.inputData || "not recorded"}
+Output preview: ${log.outputData || "not recorded"}
+Status: ${log.status}
+Duration: ${log.durationMs ? `${(log.durationMs/1000).toFixed(1)}s` : "not recorded"}
+Timestamp: ${log.timestamp}
+
+Provide a structured analysis:
+
+WHAT WAS DONE:
+[2-3 sentences describing exactly what the agent did]
+
+WHAT WAS LEARNED:
+[Key insights or patterns from this task that could help future runs]
+
+WHAT WORKED WELL:
+[What succeeded in this task]
+
+RECOMMENDATIONS FOR NEXT TIME:
+[Specific improvements the agent should make next time it runs a similar task]
+
+RELATED TASKS TO RUN NEXT:
+[2-3 suggested follow-up tasks that would build on this work]`).catch(() => "Error generating memory.");
+    setAgentMemory(result);
+    setMemoryLoading(false);
+  };
 
   const clearLogs = async () => {
     if (!window.confirm("Clear all logs? This cannot be undone.")) return;
@@ -1169,450 +1246,196 @@ function LogsPage({ T, allAgents }) {
         headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
       });
       setLogs([]);
+      setSelectedLog(null);
     } catch (e) {}
   };
 
+  const todayCount = logs.filter(l => new Date(l.timestamp).toDateString() === new Date().toDateString()).length;
+  const successCount = logs.filter(l => l.status === "success").length;
+  const errorCount = logs.filter(l => l.status === "error").length;
+
   return (
     <div>
-      {/* Stats row */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+      {/* Stats */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
         {[
           { label: "Total Logs", value: logs.length, color: "accent" },
-          { label: "Today", value: logs.filter(l => new Date(l.created_at).toDateString() === new Date().toDateString()).length, color: "green" },
-          { label: "Agents Active", value: new Set(logs.map(l => l.agent_id)).size, color: "purple" },
-          { label: "Filtered", value: filtered.length, color: "blue" },
+          { label: "Today", value: todayCount, color: "green" },
+          { label: "Successful", value: successCount, color: "blue" },
+          { label: "Errors", value: errorCount, color: "red" },
         ].map(s => (
-          <div key={s.label} style={{ flex: 1, padding: "14px 16px", borderRadius: 10, background: T[(s.color) + "Bg"] || T.bg2, border: `1px solid ${T[s.color]}22` }}>
+          <div key={s.label} style={{ flex: 1, minWidth: 80, padding: "14px 16px", borderRadius: 10, background: T[(s.color) + "Bg"] || T.bg2, border: `1px solid ${T[s.color]}22` }}>
             <div style={{ fontSize: 11, color: T.text2, marginBottom: 4 }}>{s.label}</div>
             <div style={{ fontSize: 22, fontWeight: 700, color: T[s.color] }}>{s.value}</div>
           </div>
         ))}
       </div>
 
-      {/* Filters */}
-      <Card T={T} style={{ padding: "12px 16px" }}>
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <input value={search} onChange={e => { setSearch(e.target.value); setPage(0); }}
-            placeholder="Search logs..."
-            style={{ flex: 1, minWidth: 180, padding: "8px 12px", borderRadius: 8, border: `1px solid ${T.border2}`, background: T.bg, color: T.text, fontSize: 13, outline: "none", fontFamily: "inherit" }} />
-          <button onClick={fetchLogs} style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: T.bg3, color: T.text2, cursor: "pointer", fontSize: 13, fontFamily: "inherit" }}>↻ Refresh</button>
-          <button onClick={clearLogs} style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${T.red}44`, background: T.redBg, color: T.red, cursor: "pointer", fontSize: 13, fontFamily: "inherit" }}>Clear All</button>
-        </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
-          <button onClick={() => { setFilter("all"); setPage(0); }} style={{ padding: "5px 12px", borderRadius: 20, border: `1px solid ${filter === "all" ? T.accent : T.border}`, background: filter === "all" ? T.accentBg : "transparent", color: filter === "all" ? T.accent : T.text2, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>All</button>
-          {allAgents.filter(a => a.id !== "logs").map(a => {
-            const c = T[a.color] || T.accent;
-            const isActive = filter === a.id;
-            const count = logs.filter(l => l.agent_id === a.id).length;
-            if (count === 0) return null;
-            return (
-              <button key={a.id} onClick={() => { setFilter(a.id); setPage(0); }} style={{ padding: "5px 12px", borderRadius: 20, border: `1px solid ${isActive ? c : T.border}`, background: isActive ? T[(a.color) + "Bg"] || T.accentBg : "transparent", color: isActive ? c : T.text2, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>
-                {a.icon} {a.label} ({count})
-              </button>
-            );
-          })}
-        </div>
-      </Card>
-
-      {/* Log table */}
-      <div style={{ borderRadius: 10, border: `1px solid ${T.border}`, overflow: "hidden", background: T.bg2 }}>
-        {/* Header */}
-        <div style={{ display: "grid", gridTemplateColumns: "120px 80px 1fr", gap: 0, padding: "10px 16px", borderBottom: `1px solid ${T.border}`, background: T.bg3 }}>
-          <span style={{ fontSize: 11, fontWeight: 600, color: T.text2, textTransform: "uppercase", letterSpacing: 0.8 }}>Time</span>
-          <span style={{ fontSize: 11, fontWeight: 600, color: T.text2, textTransform: "uppercase", letterSpacing: 0.8 }}>Agent</span>
-          <span style={{ fontSize: 11, fontWeight: 600, color: T.text2, textTransform: "uppercase", letterSpacing: 0.8 }}>Activity</span>
-        </div>
-
-        {loading && <div style={{ padding: 32, textAlign: "center", color: T.text2, fontSize: 14 }}>Loading logs...</div>}
-        {!loading && paginated.length === 0 && <div style={{ padding: 32, textAlign: "center", color: T.text2, fontSize: 14 }}>No logs found{search ? ` for "${search}"` : ""}</div>}
-        {!loading && paginated.map((log, i) => {
-          const agent = allAgents.find(a => a.id === log.agent_id);
-          const c = T[agent?.color] || T.text2;
-          const date = new Date(log.created_at);
-          return (
-            <div key={log.id} style={{ display: "grid", gridTemplateColumns: "120px 80px 1fr", gap: 0, padding: "12px 16px", borderBottom: i < paginated.length - 1 ? `1px solid ${T.border}` : "none", background: i % 2 === 0 ? T.bg2 : T.bg, alignItems: "center" }}>
-              <div>
-                <div style={{ fontSize: 12, color: T.text, fontWeight: 500 }}>{date.toLocaleTimeString("en", { hour: "2-digit", minute: "2-digit" })}</div>
-                <div style={{ fontSize: 10, color: T.text3 }}>{date.toLocaleDateString("en", { month: "short", day: "numeric" })}</div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <span style={{ fontSize: 14 }}>{agent?.icon || "◈"}</span>
-                <span style={{ fontSize: 11, fontWeight: 600, color: c }}>{agent?.label || log.agent_id}</span>
-              </div>
-              <div style={{ fontSize: 13, color: T.text, lineHeight: 1.4 }}>{log.message}</div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 16, alignItems: "center" }}>
-          <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} style={{ padding: "7px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: T.bg2, color: page === 0 ? T.text3 : T.text, cursor: page === 0 ? "not-allowed" : "pointer", fontFamily: "inherit", fontSize: 13 }}>← Prev</button>
-          <span style={{ fontSize: 13, color: T.text2 }}>Page {page + 1} of {totalPages} ({filtered.length} entries)</span>
-          <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} style={{ padding: "7px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: T.bg2, color: page >= totalPages - 1 ? T.text3 : T.text, cursor: page >= totalPages - 1 ? "not-allowed" : "pointer", fontFamily: "inherit", fontSize: 13 }}>Next →</button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── AGENT 11: SHOPIFY MANAGER ───────────────────────────────────────────────
-function ShopifyManagerAgent({ T, config, log }) {
-  const TABS = [
-    { id: "push",      label: "📦 Push Product" },
-    { id: "products",  label: "🗂 My Products" },
-    { id: "orders",    label: "📋 Orders" },
-    { id: "customer",  label: "💬 Customer Q&A" },
-    { id: "ads",       label: "📣 Ad Campaigns" },
-    { id: "email",     label: "📧 Email Templates" },
-  ];
-
-  const [tab, setTab] = useState("push");
-  const [products, setProducts] = useState([]);
-  const [orders, setOrders] = useState([]);
-  const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [pushLoading, setPushLoading] = useState(false);
-  const [out, setOut] = useState("");
-  const [pushResult, setPushResult] = useState(null);
-
-  // Push product form
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [price, setPrice] = useState("");
-  const [comparePrice, setComparePrice] = useState("");
-  const [cost, setCost] = useState("");
-  const [tags, setTags] = useState("");
-  const [seoTitle, setSeoTitle] = useState("");
-  const [seoDesc, setSeoDesc] = useState("");
-
-  // Customer Q&A
-  const [customerQ, setCustomerQ] = useState("");
-  const [productContext, setProductContext] = useState("");
-
-  // Ad campaign
-  const [adProduct, setAdProduct] = useState("");
-  const [adPlatform, setAdPlatform] = useState("tiktok");
-  const [adBudget, setAdBudget] = useState("$20/day");
-  const [adGoal, setAdGoal] = useState("sales");
-
-  // Email
-  const [emailType, setEmailType] = useState("welcome");
-  const [emailProduct, setEmailProduct] = useState("");
-
-  const fetchProducts = async () => {
-    setLoading(true);
-    try {
-      const r = await fetch(`${BACKEND}/api/shopify/products`);
-      const d = await r.json();
-      setProducts(d.products || []);
-    } catch (e) { setProducts([]); }
-    setLoading(false);
-  };
-
-  const fetchOrders = async () => {
-    setLoading(true);
-    try {
-      const r = await fetch(`${BACKEND}/api/shopify/orders`);
-      const d = await r.json();
-      setOrders(d.orders || []);
-    } catch (e) { setOrders([]); }
-    setLoading(false);
-  };
-
-  const fetchStats = async () => {
-    try {
-      const r = await fetch(`${BACKEND}/api/shopify/stats`);
-      const d = await r.json();
-      setStats(d);
-    } catch (e) {}
-  };
-
-  useEffect(() => { fetchStats(); }, []);
-
-  useEffect(() => {
-    if (tab === "products") fetchProducts();
-    if (tab === "orders") fetchOrders();
-  }, [tab]);
-
-  const pushProduct = async () => {
-    if (!title || !price) return;
-    setPushLoading(true); setPushResult(null);
-    log("shopify_mgr", `Pushing "${title}" to Shopify store...`);
-    try {
-      const r = await fetch(`${BACKEND}/api/shopify/product`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, body_html: description, price, compare_at_price: comparePrice, cost, tags, seo_title: seoTitle, seo_description: seoDesc }),
-      });
-      const d = await r.json();
-      if (d.success) {
-        setPushResult({ success: true, id: d.product.id, handle: d.product.handle });
-        log("shopify_mgr", `✓ "${title}" pushed to Shopify — ID: ${d.product.id}`);
-        setTitle(""); setDescription(""); setPrice(""); setComparePrice(""); setCost(""); setTags(""); setSeoTitle(""); setSeoDesc("");
-      } else {
-        setPushResult({ success: false, error: JSON.stringify(d.error) });
-        log("shopify_mgr", `✗ Failed to push "${title}": ${JSON.stringify(d.error)}`);
-      }
-    } catch (e) {
-      setPushResult({ success: false, error: e.message });
-    }
-    setPushLoading(false);
-  };
-
-  const handleCustomerQ = async () => {
-    if (!customerQ.trim()) return;
-    setLoading(true); setOut("");
-    log("shopify_mgr", `Generating customer response...`);
-    const result = await callClaude(`You are a friendly, professional customer service agent for Apex Empire, a dropshipping store. Answer this customer question professionally and helpfully.\n\nProduct context: ${productContext || "General store inquiry"}\nCustomer question: "${customerQ}"\n\nWrite a warm, helpful response that:\n- Directly answers their question\n- Builds trust and confidence\n- Mentions our satisfaction guarantee if relevant\n- Ends with an invitation to ask more questions\n- Stays under 150 words\n- Sounds human, not robotic`).catch(() => "Error.");
-    setOut(result);
-    log("shopify_mgr", `Customer response generated`);
-    setLoading(false);
-  };
-
-  const handleAdCampaign = async () => {
-    if (!adProduct.trim()) return;
-    setLoading(true); setOut("");
-    log("shopify_mgr", `Building ${adPlatform} ad campaign for "${adProduct}"...`);
-    const goalMap = { sales: "drive direct purchases", traffic: "drive website traffic", awareness: "build brand awareness", retarget: "retarget store visitors" };
-    const result = await callClaude(`You are a paid advertising expert for a Shopify dropshipping store. Create a complete ${adPlatform.toUpperCase()} ad campaign for "${adProduct}".\n\nBudget: ${adBudget}\nGoal: ${goalMap[adGoal]}\nStore: Apex Empire\n\nProvide:\n\nCAMPAIGN STRUCTURE:\n- Campaign name\n- Campaign objective\n- Budget allocation\n\nAUDIENCE TARGETING:\n- Age range\n- Interests to target\n- Behaviors\n- Locations\n- Lookalike audiences to create\n\nAD CREATIVE:\n- Hook (first 3 seconds for video)\n- Primary text (125 chars)\n- Headline\n- Description\n- CTA button\n\nBIDDING STRATEGY:\n- Bid type\n- Starting bid\n- When to scale\n\nTESTING PLAN:\n- 3 ad variations to test first\n- What to measure in first 48 hours\n- Kill/scale thresholds\n\nBe specific with numbers and targeting.`).catch(() => "Error.");
-    setOut(result);
-    log("shopify_mgr", `${adPlatform} campaign built for "${adProduct}"`);
-    setLoading(false);
-  };
-
-  const handleEmail = async () => {
-    setLoading(true); setOut("");
-    log("shopify_mgr", `Generating ${emailType} email template...`);
-    const emailPrompts = {
-      welcome: `Write a Shopify welcome email for new customers of Apex Empire dropshipping store${emailProduct ? ` who bought "${emailProduct}"` : ""}.\n\nInclude: warm welcome, what to expect, shipping timeline, support contact, and a 10% discount code for their next order. Subject line + full email body. Professional but friendly tone.`,
-      abandoned: `Write a 3-part abandoned cart email sequence for Apex Empire store${emailProduct ? ` — product: "${emailProduct}"` : ""}.\n\nEmail 1 (1hr): Gentle reminder, no discount\nEmail 2 (24hr): Add urgency + 10% off\nEmail 3 (48hr): Final offer 15% off + scarcity\n\nInclude subject lines for each.`,
-      shipping: `Write a shipping confirmation email for Apex Empire${emailProduct ? ` for "${emailProduct}"` : ""}.\n\nInclude: order confirmation, shipping details, tracking instructions, estimated delivery, what to do if there's an issue, and an upsell suggestion. Keep it exciting and build anticipation.`,
-      review: `Write a post-delivery review request email for Apex Empire${emailProduct ? ` for "${emailProduct}"` : ""}.\n\nSend 7 days after delivery. Make it personal, grateful, explain why reviews matter, make it easy to leave one, offer a small reward for honest feedback. Subject line + full email.`,
-      winback: `Write a win-back email for Apex Empire customers who haven't purchased in 60 days.\n\nInclude: we miss you message, what's new in store, exclusive returning customer discount (20% off), urgency element, and clear CTA. Subject line + full email body.`,
-      promo: `Write a promotional email for Apex Empire announcing a flash sale${emailProduct ? ` on "${emailProduct}"` : ""}.\n\nInclude: exciting subject line, sale details, how long it lasts, products on sale, CTA button text, and a PS with urgency. Keep it punchy and action-driving.`,
-    };
-    const result = await callClaude(emailPrompts[emailType]).catch(() => "Error.");
-    setOut(result);
-    log("shopify_mgr", `${emailType} email template generated`);
-    setLoading(false);
-  };
-
-  return (
-    <div>
-      {/* Stats row */}
-      {stats && (
-        <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
-          <div style={{ flex: 1, padding: "14px 16px", borderRadius: 10, background: T.greenBg, border: `1px solid ${T.green}22` }}>
-            <div style={{ fontSize: 11, color: T.text2, marginBottom: 4 }}>Products Live</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: T.green }}>{stats.productCount}</div>
-          </div>
-          <div style={{ flex: 1, padding: "14px 16px", borderRadius: 10, background: T.blueBg, border: `1px solid ${T.blue}22` }}>
-            <div style={{ fontSize: 11, color: T.text2, marginBottom: 4 }}>Total Orders</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: T.blue }}>{stats.orderCount}</div>
-          </div>
-          <div style={{ flex: 1, padding: "14px 16px", borderRadius: 10, background: T.purpleBg, border: `1px solid ${T.purple}22` }}>
-            <div style={{ fontSize: 11, color: T.text2, marginBottom: 4 }}>Store Status</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: T.purple }}>🟢 Live</div>
-          </div>
-          <div style={{ flex: 1, padding: "14px 16px", borderRadius: 10, background: T.orangeBg, border: `1px solid ${T.orange}22` }}>
-            <div style={{ fontSize: 11, color: T.text2, marginBottom: 4 }}>API</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: T.orange }}>✓ Connected</div>
-          </div>
-        </div>
-      )}
-
-      {/* Tab bar */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 16, overflowX: "auto", background: T.bg3, borderRadius: 10, padding: 4 }}>
-        {TABS.map(t => (
-          <button key={t.id} onClick={() => { setTab(t.id); setOut(""); }} style={{
-            padding: "8px 14px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600,
-            border: "none", background: tab === t.id ? T.bg2 : "transparent",
-            color: tab === t.id ? T.green : T.text2, whiteSpace: "nowrap",
-            boxShadow: tab === t.id ? T.shadow : "none", transition: "all 0.15s", fontFamily: "inherit",
-          }}>{t.label}</button>
-        ))}
-      </div>
-
-      {/* ── PUSH PRODUCT ── */}
-      {tab === "push" && (
+      <div style={{ display: "grid", gridTemplateColumns: selectedLog ? "1fr 380px" : "1fr", gap: 16 }}>
+        {/* LEFT — log list */}
         <div>
-          <LoadingBar loading={pushLoading} color="green" T={T} />
-          {pushResult && (
-            <div style={{ marginBottom: 12, padding: "12px 16px", borderRadius: 10, background: pushResult.success ? T.greenBg : T.redBg, border: `1px solid ${pushResult.success ? T.green : T.red}33` }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: pushResult.success ? T.green : T.red }}>
-                {pushResult.success ? `✓ Product pushed to Shopify! ID: ${pushResult.id}` : `✗ Error: ${pushResult.error}`}
-              </div>
-              {pushResult.success && (
-                <a href={`https://${BACKEND.includes("railway") ? "yourstore.myshopify.com" : ""}/products/${pushResult.handle}`} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: T.green, marginTop: 4, display: "block" }}>View in Shopify →</a>
-              )}
+          {/* Filters */}
+          <Card T={T} style={{ padding: "12px 16px", marginBottom: 12 }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+              <input value={search} onChange={e => { setSearch(e.target.value); setPage(0); }}
+                placeholder="Search logs..."
+                style={{ flex: 1, minWidth: 140, padding: "8px 12px", borderRadius: 8, border: `1px solid ${T.border2}`, background: T.bg, color: T.text, fontSize: 13, outline: "none", fontFamily: "inherit" }} />
+              <button onClick={fetchLogs} style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: T.bg3, color: T.text2, cursor: "pointer", fontSize: 13, fontFamily: "inherit" }}>↻</button>
+              <button onClick={clearLogs} style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${T.red}44`, background: T.redBg, color: T.red, cursor: "pointer", fontSize: 13, fontFamily: "inherit" }}>Clear</button>
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+              {["all","success","error"].map(s => (
+                <button key={s} onClick={() => { setStatusFilter(s); setPage(0); }} style={{ padding: "4px 12px", borderRadius: 20, border: `1px solid ${statusFilter === s ? T.accent : T.border}`, background: statusFilter === s ? T.accentBg : "transparent", color: statusFilter === s ? T.accent : T.text2, cursor: "pointer", fontSize: 11, fontFamily: "inherit", textTransform: "capitalize" }}>{s}</button>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <button onClick={() => { setFilter("all"); setPage(0); }} style={{ padding: "4px 12px", borderRadius: 20, border: `1px solid ${filter === "all" ? T.accent : T.border}`, background: filter === "all" ? T.accentBg : "transparent", color: filter === "all" ? T.accent : T.text2, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>All Agents</button>
+              {allAgents.filter(a => a.id !== "logs").map(a => {
+                const c = T[a.color] || T.accent;
+                const count = logs.filter(l => l.agentId === a.id).length;
+                if (count === 0) return null;
+                return (
+                  <button key={a.id} onClick={() => { setFilter(a.id); setPage(0); }} style={{ padding: "4px 12px", borderRadius: 20, border: `1px solid ${filter === a.id ? c : T.border}`, background: filter === a.id ? T[(a.color)+"Bg"] || T.accentBg : "transparent", color: filter === a.id ? c : T.text2, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>
+                    {a.icon} {a.label} ({count})
+                  </button>
+                );
+              })}
+            </div>
+          </Card>
+
+          {/* Log list */}
+          <div style={{ borderRadius: 10, border: `1px solid ${T.border}`, overflow: "hidden" }}>
+            {/* Header */}
+            <div style={{ display: "grid", gridTemplateColumns: "140px 70px 1fr 60px", padding: "10px 16px", borderBottom: `1px solid ${T.border}`, background: T.bg3 }}>
+              {["Timestamp","Agent","Activity","Duration"].map(h => (
+                <span key={h} style={{ fontSize: 11, fontWeight: 600, color: T.text2, textTransform: "uppercase", letterSpacing: 0.8 }}>{h}</span>
+              ))}
+            </div>
+            {loading && <div style={{ padding: 32, textAlign: "center", color: T.text2 }}>Loading logs...</div>}
+            {!loading && paginated.length === 0 && <div style={{ padding: 32, textAlign: "center", color: T.text2 }}>No logs found{search ? ` for "${search}"` : ""}</div>}
+            {!loading && paginated.map((log, i) => {
+              const agent = allAgents.find(a => a.id === log.agentId);
+              const c = T[agent?.color] || T.text2;
+              const isSelected = selectedLog?.id === log.id;
+              const isError = log.status === "error";
+              return (
+                <div key={log.id} onClick={() => { setSelectedLog(isSelected ? null : log); setAgentMemory(""); }}
+                  style={{ display: "grid", gridTemplateColumns: "140px 70px 1fr 60px", padding: "12px 16px", borderBottom: i < paginated.length - 1 ? `1px solid ${T.border}` : "none", background: isSelected ? T.accentBg : isError ? T.redBg : i % 2 === 0 ? T.bg2 : T.bg, cursor: "pointer", transition: "background 0.15s", alignItems: "center", borderLeft: isSelected ? `3px solid ${T.accent}` : "3px solid transparent" }}>
+                  <div>
+                    <div style={{ fontSize: 12, color: T.text, fontWeight: 500 }}>{log.time}</div>
+                    <div style={{ fontSize: 10, color: T.text3 }}>{log.date}</div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <span style={{ fontSize: 13 }}>{agent?.icon || "◈"}</span>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: c }}>{agent?.label || log.agentId}</span>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, color: isError ? T.red : T.text, lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{log.msg}</div>
+                    {log.detail && log.detail !== log.msg && <div style={{ fontSize: 11, color: T.text2, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{log.detail}</div>}
+                  </div>
+                  <div style={{ fontSize: 11, color: T.text3, textAlign: "right" }}>
+                    {log.durationMs ? `${(log.durationMs/1000).toFixed(1)}s` : "—"}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 16, alignItems: "center" }}>
+              <button onClick={() => setPage(p => Math.max(0, p-1))} disabled={page===0} style={{ padding: "7px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: T.bg2, color: page===0?T.text3:T.text, cursor: page===0?"not-allowed":"pointer", fontFamily: "inherit", fontSize: 13 }}>← Prev</button>
+              <span style={{ fontSize: 13, color: T.text2 }}>Page {page+1} of {totalPages} ({filtered.length} entries)</span>
+              <button onClick={() => setPage(p => Math.min(totalPages-1, p+1))} disabled={page>=totalPages-1} style={{ padding: "7px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: T.bg2, color: page>=totalPages-1?T.text3:T.text, cursor: page>=totalPages-1?"not-allowed":"pointer", fontFamily: "inherit", fontSize: 13 }}>Next →</button>
             </div>
           )}
-          <Card T={T}>
-            <Label T={T}>Product Title *</Label>
-            <Input value={title} onChange={setTitle} placeholder="AI Posture Corrector Smart Wearable – Vibration Alerts & App" T={T} />
-          </Card>
-          <Card T={T}>
-            <Label T={T}>Description (HTML ok)</Label>
-            <Input value={description} onChange={setDescription} placeholder="Paste your product description here..." multiline T={T} />
-          </Card>
-          <Card T={T}>
-            <Label T={T}>Pricing</Label>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-              <div><div style={{ fontSize: 12, color: T.text2, marginBottom: 5 }}>Price ($) *</div><Input value={price} onChange={setPrice} placeholder="39.99" T={T} /></div>
-              <div><div style={{ fontSize: 12, color: T.text2, marginBottom: 5 }}>Compare At ($)</div><Input value={comparePrice} onChange={setComparePrice} placeholder="79.99" T={T} /></div>
-              <div><div style={{ fontSize: 12, color: T.text2, marginBottom: 5 }}>Cost ($)</div><Input value={cost} onChange={setCost} placeholder="8.50" T={T} /></div>
-            </div>
-          </Card>
-          <Card T={T}>
-            <Label T={T}>Tags</Label>
-            <Input value={tags} onChange={setTags} placeholder="posture, wearable, back pain, office, wellness" T={T} />
-          </Card>
-          <Card T={T}>
-            <Label T={T}>SEO</Label>
-            <div style={{ display: "grid", gap: 10 }}>
-              <div><div style={{ fontSize: 12, color: T.text2, marginBottom: 5 }}>SEO Title</div><Input value={seoTitle} onChange={setSeoTitle} placeholder="AI Posture Corrector | Fix Back Pain Fast" T={T} /></div>
-              <div><div style={{ fontSize: 12, color: T.text2, marginBottom: 5 }}>SEO Description</div><Input value={seoDesc} onChange={setSeoDesc} placeholder="Smart posture corrector with vibration alerts..." T={T} /></div>
-            </div>
-          </Card>
-          <Btn onClick={pushProduct} disabled={pushLoading || !title || !price} variant="success" T={T}>
-            {pushLoading ? "Pushing to Shopify..." : "🏪 Push Product to Shopify"}
-          </Btn>
         </div>
-      )}
 
-      {/* ── MY PRODUCTS ── */}
-      {tab === "products" && (
-        <div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>Your Shopify Products</span>
-            <button onClick={fetchProducts} style={{ padding: "6px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: T.bg3, color: T.text2, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>↻ Refresh</button>
-          </div>
-          {loading && <div style={{ padding: 32, textAlign: "center", color: T.text2 }}>Loading products...</div>}
-          {!loading && products.length === 0 && <Card T={T} style={{ textAlign: "center", padding: 40 }}><div style={{ color: T.text2 }}>No products yet — push your first product above</div></Card>}
-          {products.map(p => (
-            <Card T={T} key={p.id} style={{ display: "flex", alignItems: "center", gap: 14 }}>
-              {p.image && <img src={p.image.src} alt={p.title} style={{ width: 56, height: 56, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />}
-              {!p.image && <div style={{ width: 56, height: 56, borderRadius: 8, background: T.bg3, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0 }}>📦</div>}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.title}</div>
-                <div style={{ fontSize: 12, color: T.text2, marginTop: 3 }}>${p.variants?.[0]?.price} · {p.variants?.length} variant{p.variants?.length !== 1 ? "s" : ""}</div>
-              </div>
-              <Badge color={p.status === "active" ? "green" : "yellow"} T={T}>{p.status}</Badge>
-            </Card>
-          ))}
-        </div>
-      )}
+        {/* RIGHT — detail panel */}
+        {selectedLog && (() => {
+          const agent = allAgents.find(a => a.id === selectedLog.agentId);
+          const c = T[agent?.color] || T.accent;
+          return (
+            <div>
+              <Card T={T} style={{ position: "sticky", top: 80, padding: 0, overflow: "hidden" }}>
+                {/* Header */}
+                <div style={{ padding: "14px 16px", borderBottom: `1px solid ${T.border}`, background: T[(agent?.color)+"Bg"] || T.accentBg, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 20 }}>{agent?.icon}</span>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: c }}>{agent?.label} Agent</div>
+                      <div style={{ fontSize: 10, color: T.text2 }}>{selectedLog.date} at {selectedLog.time}</div>
+                    </div>
+                  </div>
+                  <button onClick={() => { setSelectedLog(null); setAgentMemory(""); }} style={{ background: "none", border: "none", color: T.text2, cursor: "pointer", fontSize: 16 }}>✕</button>
+                </div>
 
-      {/* ── ORDERS ── */}
-      {tab === "orders" && (
-        <div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>Recent Orders</span>
-            <button onClick={fetchOrders} style={{ padding: "6px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: T.bg3, color: T.text2, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>↻ Refresh</button>
-          </div>
-          {loading && <div style={{ padding: 32, textAlign: "center", color: T.text2 }}>Loading orders...</div>}
-          {!loading && orders.length === 0 && <Card T={T} style={{ textAlign: "center", padding: 40 }}><div style={{ color: T.text2 }}>No orders yet — keep pushing those products!</div></Card>}
-          {orders.map(o => (
-            <Card T={T} key={o.id} style={{ display: "flex", alignItems: "center", gap: 14 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>Order #{o.order_number}</div>
-                <div style={{ fontSize: 12, color: T.text2, marginTop: 3 }}>{o.email} · {new Date(o.created_at).toLocaleDateString()}</div>
-                <div style={{ fontSize: 12, color: T.text2 }}>{o.line_items?.map(i => i.name).join(", ")}</div>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: T.green }}>${o.total_price}</div>
-                <Badge color={o.financial_status === "paid" ? "green" : "yellow"} T={T}>{o.financial_status}</Badge>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
+                <div style={{ padding: 16, overflowY: "auto", maxHeight: "70vh" }}>
+                  {/* Status + Duration */}
+                  <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                    <Badge color={selectedLog.status === "success" ? "green" : "red"} T={T}>{selectedLog.status === "success" ? "✓ Success" : "✗ Error"}</Badge>
+                    {selectedLog.durationMs && <Badge color="blue" T={T}>⏱ {(selectedLog.durationMs/1000).toFixed(1)}s</Badge>}
+                  </div>
 
-      {/* ── CUSTOMER Q&A ── */}
-      {tab === "customer" && (
-        <div>
-          <LoadingBar loading={loading} color="blue" T={T} />
-          <Card T={T}>
-            <Label T={T}>Product (optional)</Label>
-            <Input value={productContext} onChange={setProductContext} placeholder="e.g. AI Posture Corrector Smart Wearable" T={T} />
-          </Card>
-          <Card T={T}>
-            <Label T={T}>Customer Question *</Label>
-            <Input value={customerQ} onChange={setCustomerQ} placeholder="e.g. How long does shipping take? Does this work for lower back pain?" multiline T={T} />
-          </Card>
-          <Btn onClick={handleCustomerQ} disabled={loading || !customerQ.trim()} variant="blue" T={T}>
-            {loading ? "Generating response..." : "💬 Generate Customer Response"}
-          </Btn>
-          <OutputBox text={out} label="Customer Response" color="blue" T={T} />
-        </div>
-      )}
+                  {/* Task */}
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: T.text2, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>Task</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: T.text, lineHeight: 1.5 }}>{selectedLog.msg}</div>
+                  </div>
 
-      {/* ── AD CAMPAIGNS ── */}
-      {tab === "ads" && (
-        <div>
-          <LoadingBar loading={loading} color="purple" T={T} />
-          <Card T={T}>
-            <Label T={T}>Product</Label>
-            <Input value={adProduct} onChange={setAdProduct} placeholder="e.g. AI Posture Corrector Smart Wearable $39.99" T={T} />
-          </Card>
-          <Card T={T}>
-            <Label T={T}>Ad Platform</Label>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {[["tiktok","🎵 TikTok"],["meta","📘 Meta"],["google","🔍 Google"],["youtube","▶️ YouTube"]].map(([id,lbl]) => (
-                <Chip key={id} label={lbl} active={adPlatform === id} onClick={() => setAdPlatform(id)} color="purple" T={T} />
-              ))}
-            </div>
-          </Card>
-          <Card T={T}>
-            <Label T={T}>Daily Budget</Label>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {["$10/day","$20/day","$50/day","$100/day"].map(b => (
-                <Chip key={b} label={b} active={adBudget === b} onClick={() => setAdBudget(b)} color="purple" T={T} />
-              ))}
-            </div>
-          </Card>
-          <Card T={T}>
-            <Label T={T}>Campaign Goal</Label>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {[["sales","💰 Drive Sales"],["traffic","🌐 Drive Traffic"],["awareness","📣 Brand Awareness"],["retarget","🎯 Retargeting"]].map(([id,lbl]) => (
-                <Chip key={id} label={lbl} active={adGoal === id} onClick={() => setAdGoal(id)} color="purple" T={T} />
-              ))}
-            </div>
-          </Card>
-          <Btn onClick={handleAdCampaign} disabled={loading || !adProduct.trim()} variant="purple" T={T}>
-            {loading ? "Building campaign..." : "📣 Build Ad Campaign"}
-          </Btn>
-          <OutputBox text={out} label="Ad Campaign Plan" color="purple" T={T} />
-          <Card T={T} style={{ marginTop: 12, background: T.yellowBg, border: `1px solid ${T.yellow}33` }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: T.yellow, marginBottom: 6 }}>⚠️ Manual Approval Required</div>
-            <div style={{ fontSize: 12, color: T.text2, lineHeight: 1.7 }}>Your agent generates the complete campaign strategy and creative. To actually run the ads, copy the campaign details above into your TikTok Ads Manager, Meta Ads Manager, or Google Ads account. Full auto-buying ads requires Meta/TikTok API approval which is in progress.</div>
-          </Card>
-        </div>
-      )}
+                  {/* Detail */}
+                  {selectedLog.detail && selectedLog.detail !== selectedLog.msg && (
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: T.text2, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>Description</div>
+                      <div style={{ fontSize: 13, color: T.text2, lineHeight: 1.6 }}>{selectedLog.detail}</div>
+                    </div>
+                  )}
 
-      {/* ── EMAIL TEMPLATES ── */}
-      {tab === "email" && (
-        <div>
-          <LoadingBar loading={loading} color="orange" T={T} />
-          <Card T={T}>
-            <Label T={T}>Email Type</Label>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              {[["welcome","👋 Welcome"],["abandoned","🛒 Abandoned Cart"],["shipping","📦 Shipping Confirm"],["review","⭐ Review Request"],["winback","💝 Win-Back"],["promo","🔥 Promotional"]].map(([id,lbl]) => (
-                <button key={id} onClick={() => setEmailType(id)} style={{ padding: "10px 14px", borderRadius: 8, cursor: "pointer", textAlign: "left", border: `1px solid ${emailType === id ? T.orange : T.border}`, background: emailType === id ? T.orangeBg : T.bg, color: emailType === id ? T.orange : T.text2, fontSize: 13, fontFamily: "inherit", transition: "all 0.15s" }}>{lbl}</button>
-              ))}
+                  {/* Input */}
+                  {selectedLog.inputData && (
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: T.text2, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>Input</div>
+                      <div style={{ fontSize: 12, color: T.text2, background: T.bg3, padding: "10px 12px", borderRadius: 8, lineHeight: 1.6, maxHeight: 120, overflowY: "auto" }}>{selectedLog.inputData}</div>
+                    </div>
+                  )}
+
+                  {/* Output preview */}
+                  {selectedLog.outputData && (
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: T.text2, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>Output Preview</div>
+                      <div style={{ fontSize: 12, color: T.text, background: T.bg3, padding: "10px 12px", borderRadius: 8, lineHeight: 1.6, maxHeight: 150, overflowY: "auto" }}>{selectedLog.outputData}</div>
+                    </div>
+                  )}
+
+                  {/* Timestamp */}
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: T.text2, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>Full Timestamp</div>
+                    <div style={{ fontSize: 12, color: T.text3, fontFamily: "monospace" }}>{selectedLog.timestamp}</div>
+                  </div>
+
+                  {/* Agent Memory button */}
+                  <button onClick={() => generateMemory(selectedLog)} disabled={memoryLoading} style={{
+                    width: "100%", padding: "10px", borderRadius: 8, border: `1px solid ${c}`,
+                    background: T[(agent?.color)+"Bg"] || T.accentBg, color: c,
+                    fontSize: 13, fontWeight: 600, cursor: memoryLoading ? "not-allowed" : "pointer",
+                    fontFamily: "inherit", marginBottom: 12, transition: "all 0.15s",
+                  }}>
+                    {memoryLoading ? "🧠 Analyzing..." : "🧠 Generate Agent Memory"}
+                  </button>
+
+                  {/* Memory output */}
+                  {agentMemory && (
+                    <div style={{ borderRadius: 8, border: `1px solid ${c}33`, background: T.bg3, overflow: "hidden" }}>
+                      <div style={{ padding: "8px 12px", borderBottom: `1px solid ${c}22`, fontSize: 11, fontWeight: 700, color: c, textTransform: "uppercase", letterSpacing: 1 }}>🧠 Agent Memory Analysis</div>
+                      <div style={{ padding: 12, fontSize: 12, color: T.text2, lineHeight: 1.8, whiteSpace: "pre-wrap", maxHeight: 300, overflowY: "auto" }}>{agentMemory}</div>
+                    </div>
+                  )}
+                </div>
+              </Card>
             </div>
-          </Card>
-          <Card T={T}>
-            <Label T={T}>Product (optional)</Label>
-            <Input value={emailProduct} onChange={setEmailProduct} placeholder="e.g. AI Posture Corrector Smart Wearable" T={T} />
-          </Card>
-          <Btn onClick={handleEmail} disabled={loading} variant="orange" T={T}>
-            {loading ? "Writing email..." : "📧 Generate Email Template"}
-          </Btn>
-          <OutputBox text={out} label="Email Template" color="orange" T={T} />
-        </div>
-      )}
+          );
+        })()}
+      </div>
     </div>
   );
 }
