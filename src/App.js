@@ -1095,7 +1095,7 @@ function DropshipAgent({ T, config, log }) {
 }
 
 // ─── AGENT 10: STORE COPY ────────────────────────────────────────────────────
-function StoreCopyAgent({ T, config, log }) {
+function StoreCopyAgent({ T, config, log, onShopifyReady }) {
   const COPY_TYPES = [
     { id: "product", label: "Product Listing" }, { id: "ads", label: "Ad Copy" },
     { id: "email", label: "Email Sequence" }, { id: "homepage", label: "Homepage Copy" },
@@ -1130,7 +1130,36 @@ function StoreCopyAgent({ T, config, log }) {
 
     const result = await callClaude(prompts[copyType]).catch(() => "Error.");
     setOut(result);
-    log("storecopy", `${copyType} copy generated for "${productName}"`);
+    log("storecopy", `${copyType} copy generated for "${productName}"`, `Generated ${copyType} for "${productName}" at $${price}`, `Product: ${productName} | Price: $${price} | Audience: ${targetAudience}`, result.slice(0, 500));
+
+    // Auto-send to Shopify Agent if product listing was generated
+    if (copyType === "product" && onShopifyReady && result && !result.startsWith("Error")) {
+      // Parse title from output
+      const titleMatch = result.match(/PRODUCT TITLE:\s*`?([^`
+]+)`?/i) || result.match(/PRODUCT TITLE:\s*(.+)/i);
+      const seoTitleMatch = result.match(/SEO META TITLE:\s*`?([^`
+]+)`?/i) || result.match(/SEO META TITLE:\s*(.+)/i);
+      const seoDescMatch = result.match(/SEO META DESCRIPTION:\s*`?([^`
+]+)`?/i) || result.match(/SEO META DESCRIPTION:\s*(.+)/i);
+      const tagsMatch = result.match(/TAGS:\s*`?([^`
+]+)`?/i) || result.match(/TAGS:\s*(.+)/i);
+      const parsedTitle = titleMatch?.[1]?.trim() || productName;
+      const parsedSeoTitle = seoTitleMatch?.[1]?.trim() || parsedTitle;
+      const parsedSeoDesc = seoDescMatch?.[1]?.trim() || "";
+      const parsedTags = tagsMatch?.[1]?.trim() || "";
+      onShopifyReady({
+        title: parsedTitle,
+        description: result,
+        price: price || "",
+        comparePrice: price ? String(Math.round(parseFloat(price) * 2)) : "",
+        cost: "",
+        tags: parsedTags,
+        seoTitle: parsedSeoTitle,
+        seoDesc: parsedSeoDesc,
+        source: `Store Copy Agent — ${productName}`,
+      });
+      log("storecopy", `Product listing auto-sent to Shopify Agent`, `"${parsedTitle}" is ready to push to your Shopify store`);
+    }
     setLoading(false);
   };
 
@@ -1355,87 +1384,474 @@ RELATED TASKS TO RUN NEXT:
         {selectedLog && (() => {
           const agent = allAgents.find(a => a.id === selectedLog.agentId);
           const c = T[agent?.color] || T.accent;
+          const bg = T[(agent?.color)+"Bg"] || T.accentBg;
           return (
-            <div>
-              <Card T={T} style={{ position: "sticky", top: 80, padding: 0, overflow: "hidden" }}>
+            <>
+              {/* Mobile overlay backdrop */}
+              <div onClick={() => { setSelectedLog(null); setAgentMemory(""); }}
+                style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 60, display: window.innerWidth < 900 ? "block" : "none" }} />
+
+              {/* Detail panel — fixed on mobile, sticky on desktop */}
+              <div style={{
+                position: window.innerWidth < 900 ? "fixed" : "sticky",
+                top: window.innerWidth < 900 ? "auto" : 80,
+                bottom: window.innerWidth < 900 ? 0 : "auto",
+                left: window.innerWidth < 900 ? 0 : "auto",
+                right: window.innerWidth < 900 ? 0 : "auto",
+                width: window.innerWidth < 900 ? "100%" : 380,
+                maxHeight: window.innerWidth < 900 ? "80vh" : "85vh",
+                zIndex: 70,
+                borderRadius: window.innerWidth < 900 ? "16px 16px 0 0" : 12,
+                border: `1px solid ${T.border}`,
+                background: T.bg2,
+                overflow: "hidden",
+                display: "flex",
+                flexDirection: "column",
+                boxShadow: T.shadow3,
+              }}>
                 {/* Header */}
-                <div style={{ padding: "14px 16px", borderBottom: `1px solid ${T.border}`, background: T[(agent?.color)+"Bg"] || T.accentBg, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ padding: "14px 16px", borderBottom: `1px solid ${T.border}`, background: bg, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 20 }}>{agent?.icon}</span>
+                    <span style={{ fontSize: 20 }}>{agent?.icon || "◈"}</span>
                     <div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: c }}>{agent?.label} Agent</div>
-                      <div style={{ fontSize: 10, color: T.text2 }}>{selectedLog.date} at {selectedLog.time}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: c }}>{agent?.label || selectedLog.agentId} Agent</div>
+                      <div style={{ fontSize: 11, color: T.text2 }}>{selectedLog.date} at {selectedLog.time}</div>
                     </div>
                   </div>
-                  <button onClick={() => { setSelectedLog(null); setAgentMemory(""); }} style={{ background: "none", border: "none", color: T.text2, cursor: "pointer", fontSize: 16 }}>✕</button>
+                  <button onClick={() => { setSelectedLog(null); setAgentMemory(""); }}
+                    style={{ background: T.bg3, border: `1px solid ${T.border2}`, color: T.text2, cursor: "pointer", fontSize: 14, width: 28, height: 28, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
                 </div>
 
-                <div style={{ padding: 16, overflowY: "auto", maxHeight: "70vh" }}>
+                {/* Scrollable body */}
+                <div style={{ padding: 16, overflowY: "auto", flex: 1 }}>
                   {/* Status + Duration */}
-                  <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-                    <Badge color={selectedLog.status === "success" ? "green" : "red"} T={T}>{selectedLog.status === "success" ? "✓ Success" : "✗ Error"}</Badge>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+                    <Badge color={selectedLog.status === "error" ? "red" : "green"} T={T}>
+                      {selectedLog.status === "error" ? "✗ Error" : "✓ Success"}
+                    </Badge>
                     {selectedLog.durationMs && <Badge color="blue" T={T}>⏱ {(selectedLog.durationMs/1000).toFixed(1)}s</Badge>}
+                    <Badge color={agent?.color || "accent"} T={T}>AG-{agent?.num || "?"}</Badge>
                   </div>
 
                   {/* Task */}
-                  <div style={{ marginBottom: 14 }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: T.text2, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>Task</div>
+                  <div style={{ marginBottom: 14, padding: "12px 14px", borderRadius: 8, background: T.bg3, border: `1px solid ${T.border}` }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Task Performed</div>
                     <div style={{ fontSize: 14, fontWeight: 600, color: T.text, lineHeight: 1.5 }}>{selectedLog.msg}</div>
                   </div>
 
                   {/* Detail */}
-                  {selectedLog.detail && selectedLog.detail !== selectedLog.msg && (
-                    <div style={{ marginBottom: 14 }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: T.text2, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>Description</div>
-                      <div style={{ fontSize: 13, color: T.text2, lineHeight: 1.6 }}>{selectedLog.detail}</div>
-                    </div>
-                  )}
+                  <div style={{ marginBottom: 14, padding: "12px 14px", borderRadius: 8, background: T.bg3, border: `1px solid ${T.border}` }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Description</div>
+                    <div style={{ fontSize: 13, color: T.text2, lineHeight: 1.6 }}>{selectedLog.detail || selectedLog.msg}</div>
+                  </div>
 
                   {/* Input */}
-                  {selectedLog.inputData && (
+                  {selectedLog.inputData ? (
                     <div style={{ marginBottom: 14 }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: T.text2, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>Input</div>
-                      <div style={{ fontSize: 12, color: T.text2, background: T.bg3, padding: "10px 12px", borderRadius: 8, lineHeight: 1.6, maxHeight: 120, overflowY: "auto" }}>{selectedLog.inputData}</div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Input Data</div>
+                      <div style={{ fontSize: 12, color: T.text2, background: T.bg3, padding: "10px 12px", borderRadius: 8, lineHeight: 1.6, maxHeight: 120, overflowY: "auto", border: `1px solid ${T.border}` }}>{selectedLog.inputData}</div>
+                    </div>
+                  ) : (
+                    <div style={{ marginBottom: 14, padding: "10px 12px", borderRadius: 8, background: T.bg3, border: `1px solid ${T.border}` }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Input Data</div>
+                      <div style={{ fontSize: 12, color: T.text3 }}>Not recorded — run a new task to capture input data</div>
                     </div>
                   )}
 
-                  {/* Output preview */}
-                  {selectedLog.outputData && (
+                  {/* Output */}
+                  {selectedLog.outputData ? (
                     <div style={{ marginBottom: 14 }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: T.text2, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>Output Preview</div>
-                      <div style={{ fontSize: 12, color: T.text, background: T.bg3, padding: "10px 12px", borderRadius: 8, lineHeight: 1.6, maxHeight: 150, overflowY: "auto" }}>{selectedLog.outputData}</div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Output Preview</div>
+                      <div style={{ fontSize: 12, color: T.text, background: T.bg3, padding: "10px 12px", borderRadius: 8, lineHeight: 1.6, maxHeight: 150, overflowY: "auto", border: `1px solid ${T.border}` }}>{selectedLog.outputData}</div>
+                    </div>
+                  ) : (
+                    <div style={{ marginBottom: 14, padding: "10px 12px", borderRadius: 8, background: T.bg3, border: `1px solid ${T.border}` }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Output Preview</div>
+                      <div style={{ fontSize: 12, color: T.text3 }}>Not recorded — run a new task to capture output data</div>
                     </div>
                   )}
 
                   {/* Timestamp */}
-                  <div style={{ marginBottom: 16 }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: T.text2, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>Full Timestamp</div>
-                    <div style={{ fontSize: 12, color: T.text3, fontFamily: "monospace" }}>{selectedLog.timestamp}</div>
+                  <div style={{ marginBottom: 16, padding: "10px 12px", borderRadius: 8, background: T.bg3, border: `1px solid ${T.border}` }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Timestamp</div>
+                    <div style={{ fontSize: 11, color: T.text3, fontFamily: "monospace" }}>{selectedLog.timestamp || `${selectedLog.date} ${selectedLog.time}`}</div>
                   </div>
 
                   {/* Agent Memory button */}
                   <button onClick={() => generateMemory(selectedLog)} disabled={memoryLoading} style={{
-                    width: "100%", padding: "10px", borderRadius: 8, border: `1px solid ${c}`,
-                    background: T[(agent?.color)+"Bg"] || T.accentBg, color: c,
-                    fontSize: 13, fontWeight: 600, cursor: memoryLoading ? "not-allowed" : "pointer",
-                    fontFamily: "inherit", marginBottom: 12, transition: "all 0.15s",
+                    width: "100%", padding: "12px", borderRadius: 8,
+                    border: `1px solid ${c}`,
+                    background: bg, color: c,
+                    fontSize: 14, fontWeight: 700,
+                    cursor: memoryLoading ? "not-allowed" : "pointer",
+                    fontFamily: "inherit", marginBottom: 12,
+                    transition: "all 0.15s",
+                    opacity: memoryLoading ? 0.7 : 1,
                   }}>
-                    {memoryLoading ? "🧠 Analyzing..." : "🧠 Generate Agent Memory"}
+                    {memoryLoading ? "🧠 Analyzing task..." : "🧠 Generate Agent Memory"}
                   </button>
 
                   {/* Memory output */}
                   {agentMemory && (
                     <div style={{ borderRadius: 8, border: `1px solid ${c}33`, background: T.bg3, overflow: "hidden" }}>
-                      <div style={{ padding: "8px 12px", borderBottom: `1px solid ${c}22`, fontSize: 11, fontWeight: 700, color: c, textTransform: "uppercase", letterSpacing: 1 }}>🧠 Agent Memory Analysis</div>
-                      <div style={{ padding: 12, fontSize: 12, color: T.text2, lineHeight: 1.8, whiteSpace: "pre-wrap", maxHeight: 300, overflowY: "auto" }}>{agentMemory}</div>
+                      <div style={{ padding: "10px 14px", borderBottom: `1px solid ${c}22`, fontSize: 11, fontWeight: 700, color: c, textTransform: "uppercase", letterSpacing: 1 }}>🧠 Agent Memory</div>
+                      <div style={{ padding: 14, fontSize: 12, color: T.text2, lineHeight: 1.9, whiteSpace: "pre-wrap" }}>{agentMemory}</div>
                     </div>
                   )}
                 </div>
-              </Card>
-            </div>
+              </div>
+            </>
           );
         })()}
       </div>
+    </div>
+  );
+}
+
+// ─── AGENT 11: SHOPIFY MANAGER ───────────────────────────────────────────────
+function ShopifyManagerAgent({ T, config, log, incomingData }) {
+  const TABS = [
+    { id: "push",     label: "📦 Push Product" },
+    { id: "products", label: "🗂 Products" },
+    { id: "orders",   label: "📋 Orders" },
+    { id: "customer", label: "💬 Customer Q&A" },
+    { id: "ads",      label: "📣 Ad Campaigns" },
+    { id: "email",    label: "📧 Emails" },
+  ];
+
+  const [tab, setTab] = useState("push");
+  const [products, setProducts] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [out, setOut] = useState("");
+  const [pushResult, setPushResult] = useState(null);
+
+  // Push product form — pre-filled from incoming data
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [price, setPrice] = useState("");
+  const [comparePrice, setComparePrice] = useState("");
+  const [cost, setCost] = useState("");
+  const [tags, setTags] = useState("");
+  const [seoTitle, setSeoTitle] = useState("");
+  const [seoDesc, setSeoDesc] = useState("");
+
+  // Auto-fill when incoming data arrives from Store Copy Agent
+  useEffect(() => {
+    if (incomingData?.source) {
+      setTitle(incomingData.title || "");
+      setDescription(incomingData.description || "");
+      setPrice(incomingData.price || "");
+      setComparePrice(incomingData.comparePrice || "");
+      setCost(incomingData.cost || "");
+      setTags(incomingData.tags || "");
+      setSeoTitle(incomingData.seoTitle || "");
+      setSeoDesc(incomingData.seoDesc || "");
+      setPushResult(null);
+      setTab("push");
+    }
+  }, [incomingData]);
+
+  // Customer Q&A
+  const [customerQ, setCustomerQ] = useState("");
+  const [productContext, setProductContext] = useState("");
+
+  // Ad campaign
+  const [adProduct, setAdProduct] = useState("");
+  const [adPlatform, setAdPlatform] = useState("tiktok");
+  const [adBudget, setAdBudget] = useState("$20/day");
+  const [adGoal, setAdGoal] = useState("sales");
+
+  // Email
+  const [emailType, setEmailType] = useState("welcome");
+  const [emailProduct, setEmailProduct] = useState("");
+
+  const fetchProducts = async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`${BACKEND}/api/shopify/products`);
+      const d = await r.json();
+      setProducts(d.products || []);
+    } catch (e) { setProducts([]); }
+    setLoading(false);
+  };
+
+  const fetchOrders = async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`${BACKEND}/api/shopify/orders`);
+      const d = await r.json();
+      setOrders(d.orders || []);
+    } catch (e) { setOrders([]); }
+    setLoading(false);
+  };
+
+  const fetchStats = async () => {
+    try {
+      const r = await fetch(`${BACKEND}/api/shopify/stats`);
+      const d = await r.json();
+      setStats(d);
+    } catch (e) {}
+  };
+
+  useEffect(() => { fetchStats(); }, []);
+  useEffect(() => {
+    if (tab === "products") fetchProducts();
+    if (tab === "orders") fetchOrders();
+  }, [tab]);
+
+  const pushProduct = async () => {
+    if (!title || !price) return;
+    setPushLoading(true); setPushResult(null);
+    const startTime = Date.now();
+    log("shopify_mgr", `Pushing "${title}" to Shopify...`, `Pushing product "${title}" at $${price} to Shopify store`, `Title: ${title} | Price: $${price} | Tags: ${tags}`);
+    try {
+      const r = await fetch(`${BACKEND}/api/shopify/product`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, body_html: description, price, compare_at_price: comparePrice, cost, tags, seo_title: seoTitle, seo_description: seoDesc }),
+      });
+      const d = await r.json();
+      if (d.success) {
+        setPushResult({ success: true, id: d.product.id, handle: d.product.handle });
+        log("shopify_mgr", `✓ "${title}" live on Shopify`, `Product "${title}" successfully pushed to Shopify store with ID ${d.product.id}`, "", `Product ID: ${d.product.id}`, "success", startTime);
+        fetchStats();
+      } else {
+        setPushResult({ success: false, error: JSON.stringify(d.error) });
+        log("shopify_mgr", `✗ Failed to push "${title}"`, JSON.stringify(d.error), "", "", "error", startTime);
+      }
+    } catch (e) {
+      setPushResult({ success: false, error: e.message });
+    }
+    setPushLoading(false);
+  };
+
+  const handleCustomerQ = async () => {
+    if (!customerQ.trim()) return;
+    setLoading(true); setOut("");
+    const startTime = Date.now();
+    log("shopify_mgr", `Generating customer response...`);
+    const result = await callClaude(`You are a friendly professional customer service agent for Apex Empire. Answer this customer question warmly and helpfully.\n\nProduct: ${productContext || "General store inquiry"}\nQuestion: "${customerQ}"\n\nWrite a response that directly answers, builds trust, mentions our guarantee if relevant, ends with invitation to ask more. Under 150 words. Human, not robotic.`).catch(() => "Error.");
+    setOut(result);
+    log("shopify_mgr", `Customer response generated`, `Responded to: "${customerQ}"`, customerQ, result.slice(0, 300), "success", startTime);
+    setLoading(false);
+  };
+
+  const handleAdCampaign = async () => {
+    if (!adProduct.trim()) return;
+    setLoading(true); setOut("");
+    const startTime = Date.now();
+    log("shopify_mgr", `Building ${adPlatform} campaign for "${adProduct}"...`);
+    const goalMap = { sales: "drive direct purchases", traffic: "drive website traffic", awareness: "build brand awareness", retarget: "retarget store visitors" };
+    const result = await callClaude(`You are a paid ads expert for a Shopify dropshipping store. Create a complete ${adPlatform.toUpperCase()} ad campaign for "${adProduct}".\n\nBudget: ${adBudget}\nGoal: ${goalMap[adGoal]}\nStore: Apex Empire\n\nProvide:\nCAMPAIGN STRUCTURE: name, objective, budget split\nAUDIENCE TARGETING: age, interests, behaviors, locations, lookalikes\nAD CREATIVE: hook (3 sec), primary text (125 chars), headline, description, CTA\nBIDDING STRATEGY: bid type, starting bid, scale triggers\nTESTING PLAN: 3 ad variations, 48hr metrics to watch, kill/scale thresholds\n\nBe specific with numbers.`).catch(() => "Error.");
+    setOut(result);
+    log("shopify_mgr", `${adPlatform} campaign built`, `Ad campaign for "${adProduct}" on ${adPlatform} with ${adBudget} budget`, `Product: ${adProduct} | Platform: ${adPlatform} | Budget: ${adBudget}`, result.slice(0, 300), "success", startTime);
+    setLoading(false);
+  };
+
+  const handleEmail = async () => {
+    setLoading(true); setOut("");
+    const startTime = Date.now();
+    log("shopify_mgr", `Generating ${emailType} email...`);
+    const emailPrompts = {
+      welcome: `Write a Shopify welcome email for Apex Empire customers${emailProduct ? ` who bought "${emailProduct}"` : ""}. Include: warm welcome, shipping timeline, support contact, 10% next order discount code. Subject + full body. Friendly professional tone.`,
+      abandoned: `Write a 3-part abandoned cart sequence for Apex Empire${emailProduct ? ` — product: "${emailProduct}"` : ""}.\nEmail 1 (1hr): Gentle reminder, no discount\nEmail 2 (24hr): Urgency + 10% off\nEmail 3 (48hr): Final 15% off + scarcity\nInclude subject lines for each.`,
+      shipping: `Write a shipping confirmation email for Apex Empire${emailProduct ? ` for "${emailProduct}"` : ""}. Include order confirmation, shipping details, tracking instructions, estimated delivery, issue resolution, and an upsell. Build excitement.`,
+      review: `Write a post-delivery review request email for Apex Empire${emailProduct ? ` for "${emailProduct}"` : ""}. Send 7 days after delivery. Personal, grateful, explains why reviews matter, easy to leave one, small reward for feedback. Subject + full email.`,
+      winback: `Write a win-back email for Apex Empire customers inactive 60 days. Include: we miss you, what's new, 20% returning customer discount, urgency, clear CTA. Subject + full body.`,
+      promo: `Write a promotional flash sale email for Apex Empire${emailProduct ? ` on "${emailProduct}"` : ""}. Exciting subject, sale details, duration, CTA button text, PS with urgency. Punchy and action-driving.`,
+    };
+    const result = await callClaude(emailPrompts[emailType]).catch(() => "Error.");
+    setOut(result);
+    log("shopify_mgr", `${emailType} email generated`, `Generated ${emailType} email template${emailProduct ? ` for "${emailProduct}"` : ""}`, emailProduct, result.slice(0, 300), "success", startTime);
+    setLoading(false);
+  };
+
+  return (
+    <div>
+      {/* Stats */}
+      {stats && (
+        <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+          {[
+            { label: "Products Live", value: stats.productCount, color: "green" },
+            { label: "Total Orders", value: stats.orderCount, color: "blue" },
+            { label: "Store Status", value: "🟢 Live", color: "purple", isText: true },
+            { label: "API", value: "✓ Connected", color: "orange", isText: true },
+          ].map(s => (
+            <div key={s.label} style={{ flex: 1, minWidth: 80, padding: "14px 16px", borderRadius: 10, background: T[s.color+"Bg"], border: `1px solid ${T[s.color]}22` }}>
+              <div style={{ fontSize: 11, color: T.text2, marginBottom: 4 }}>{s.label}</div>
+              <div style={{ fontSize: s.isText ? 14 : 22, fontWeight: 700, color: T[s.color] }}>{s.value}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Incoming data banner */}
+      {incomingData?.source && (
+        <div style={{ marginBottom: 14, padding: "12px 16px", borderRadius: 10, background: T.greenBg, border: `1px solid ${T.green}33`, display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 18 }}>✓</span>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: T.green }}>Product received from Store Copy Agent</div>
+            <div style={{ fontSize: 12, color: T.text2, marginTop: 2 }}>{incomingData.source} — ready to push to Shopify</div>
+          </div>
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 16, overflowX: "auto", background: T.bg3, borderRadius: 10, padding: 4 }}>
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => { setTab(t.id); setOut(""); }} style={{
+            padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600,
+            border: "none", background: tab === t.id ? T.bg2 : "transparent",
+            color: tab === t.id ? T.green : T.text2, whiteSpace: "nowrap",
+            boxShadow: tab === t.id ? T.shadow : "none", transition: "all 0.15s", fontFamily: "inherit",
+          }}>{t.label}</button>
+        ))}
+      </div>
+
+      {/* ── PUSH PRODUCT ── */}
+      {tab === "push" && (
+        <div>
+          <LoadingBar loading={pushLoading} color="green" T={T} />
+          {pushResult && (
+            <div style={{ marginBottom: 12, padding: "12px 16px", borderRadius: 10, background: pushResult.success ? T.greenBg : T.redBg, border: `1px solid ${pushResult.success ? T.green : T.red}33` }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: pushResult.success ? T.green : T.red }}>
+                {pushResult.success ? `✓ Product pushed! ID: ${pushResult.id}` : `✗ Error: ${pushResult.error}`}
+              </div>
+            </div>
+          )}
+          <Card T={T}><Label T={T}>Product Title *</Label><Input value={title} onChange={setTitle} placeholder="e.g. AI Posture Corrector Smart Wearable" T={T} /></Card>
+          <Card T={T}><Label T={T}>Description (HTML ok)</Label><Input value={description} onChange={setDescription} placeholder="Paste your product description..." multiline T={T} /></Card>
+          <Card T={T}>
+            <Label T={T}>Pricing</Label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+              <div><div style={{ fontSize: 12, color: T.text2, marginBottom: 5 }}>Price ($) *</div><Input value={price} onChange={setPrice} placeholder="39.99" T={T} /></div>
+              <div><div style={{ fontSize: 12, color: T.text2, marginBottom: 5 }}>Compare At ($)</div><Input value={comparePrice} onChange={setComparePrice} placeholder="79.99" T={T} /></div>
+              <div><div style={{ fontSize: 12, color: T.text2, marginBottom: 5 }}>Your Cost ($)</div><Input value={cost} onChange={setCost} placeholder="8.50" T={T} /></div>
+            </div>
+          </Card>
+          <Card T={T}><Label T={T}>Tags</Label><Input value={tags} onChange={setTags} placeholder="posture, wearable, back pain, office, wellness" T={T} /></Card>
+          <Card T={T}>
+            <Label T={T}>SEO</Label>
+            <div style={{ display: "grid", gap: 10 }}>
+              <div><div style={{ fontSize: 12, color: T.text2, marginBottom: 5 }}>SEO Title</div><Input value={seoTitle} onChange={setSeoTitle} placeholder="AI Posture Corrector | Fix Back Pain Fast" T={T} /></div>
+              <div><div style={{ fontSize: 12, color: T.text2, marginBottom: 5 }}>SEO Description</div><Input value={seoDesc} onChange={setSeoDesc} placeholder="Smart posture corrector with vibration alerts..." T={T} /></div>
+            </div>
+          </Card>
+          <Btn onClick={pushProduct} disabled={pushLoading || !title || !price} variant="success" T={T}>
+            {pushLoading ? "Pushing to Shopify..." : "🏪 Push Product to Shopify"}
+          </Btn>
+        </div>
+      )}
+
+      {/* ── PRODUCTS ── */}
+      {tab === "products" && (
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>Live Products ({products.length})</span>
+            <button onClick={fetchProducts} style={{ padding: "6px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: T.bg3, color: T.text2, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>↻ Refresh</button>
+          </div>
+          {loading && <div style={{ padding: 32, textAlign: "center", color: T.text2 }}>Loading...</div>}
+          {!loading && products.length === 0 && <Card T={T} style={{ textAlign: "center", padding: 40 }}><div style={{ color: T.text2 }}>No products yet — push your first product above</div></Card>}
+          {products.map(p => (
+            <Card T={T} key={p.id} style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              {p.image ? <img src={p.image.src} alt={p.title} style={{ width: 52, height: 52, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} /> : <div style={{ width: 52, height: 52, borderRadius: 8, background: T.bg3, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>📦</div>}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.title}</div>
+                <div style={{ fontSize: 12, color: T.text2, marginTop: 2 }}>${p.variants?.[0]?.price}</div>
+              </div>
+              <Badge color={p.status === "active" ? "green" : "yellow"} T={T}>{p.status}</Badge>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* ── ORDERS ── */}
+      {tab === "orders" && (
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>Orders ({orders.length})</span>
+            <button onClick={fetchOrders} style={{ padding: "6px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: T.bg3, color: T.text2, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>↻ Refresh</button>
+          </div>
+          {loading && <div style={{ padding: 32, textAlign: "center", color: T.text2 }}>Loading...</div>}
+          {!loading && orders.length === 0 && <Card T={T} style={{ textAlign: "center", padding: 40 }}><div style={{ color: T.text2 }}>No orders yet — keep pushing products!</div></Card>}
+          {orders.map(o => (
+            <Card T={T} key={o.id} style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>Order #{o.order_number}</div>
+                <div style={{ fontSize: 12, color: T.text2, marginTop: 2 }}>{o.email} · {new Date(o.created_at).toLocaleDateString()}</div>
+                <div style={{ fontSize: 12, color: T.text2 }}>{o.line_items?.map(i => i.name).join(", ")}</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: T.green }}>${o.total_price}</div>
+                <Badge color={o.financial_status === "paid" ? "green" : "yellow"} T={T}>{o.financial_status}</Badge>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* ── CUSTOMER Q&A ── */}
+      {tab === "customer" && (
+        <div>
+          <LoadingBar loading={loading} color="blue" T={T} />
+          <Card T={T}><Label T={T}>Product (optional)</Label><Input value={productContext} onChange={setProductContext} placeholder="e.g. AI Posture Corrector Smart Wearable" T={T} /></Card>
+          <Card T={T}><Label T={T}>Customer Question *</Label><Input value={customerQ} onChange={setCustomerQ} placeholder="e.g. How long does shipping take? Does this work for lower back pain?" multiline T={T} /></Card>
+          <Btn onClick={handleCustomerQ} disabled={loading || !customerQ.trim()} variant="blue" T={T}>{loading ? "Generating..." : "💬 Generate Response"}</Btn>
+          <OutputBox text={out} label="Customer Response" color="blue" T={T} />
+        </div>
+      )}
+
+      {/* ── AD CAMPAIGNS ── */}
+      {tab === "ads" && (
+        <div>
+          <LoadingBar loading={loading} color="purple" T={T} />
+          <Card T={T}><Label T={T}>Product</Label><Input value={adProduct} onChange={setAdProduct} placeholder="e.g. AI Posture Corrector $39.99" T={T} /></Card>
+          <Card T={T}>
+            <Label T={T}>Platform</Label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {[["tiktok","🎵 TikTok"],["meta","📘 Meta"],["google","🔍 Google"],["youtube","▶️ YouTube"]].map(([id,lbl]) => <Chip key={id} label={lbl} active={adPlatform===id} onClick={() => setAdPlatform(id)} color="purple" T={T} />)}
+            </div>
+          </Card>
+          <Card T={T}>
+            <Label T={T}>Daily Budget</Label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {["$10/day","$20/day","$50/day","$100/day"].map(b => <Chip key={b} label={b} active={adBudget===b} onClick={() => setAdBudget(b)} color="purple" T={T} />)}
+            </div>
+          </Card>
+          <Card T={T}>
+            <Label T={T}>Goal</Label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {[["sales","💰 Sales"],["traffic","🌐 Traffic"],["awareness","📣 Awareness"],["retarget","🎯 Retarget"]].map(([id,lbl]) => <Chip key={id} label={lbl} active={adGoal===id} onClick={() => setAdGoal(id)} color="purple" T={T} />)}
+            </div>
+          </Card>
+          <Btn onClick={handleAdCampaign} disabled={loading || !adProduct.trim()} variant="purple" T={T}>{loading ? "Building campaign..." : "📣 Build Ad Campaign"}</Btn>
+          <OutputBox text={out} label="Ad Campaign Plan" color="purple" T={T} />
+          <Card T={T} style={{ marginTop: 12, background: T.yellowBg, border: `1px solid ${T.yellow}33` }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: T.yellow, marginBottom: 4 }}>⚠️ Manual approval required</div>
+            <div style={{ fontSize: 12, color: T.text2 }}>Copy the campaign above into TikTok Ads Manager, Meta Ads Manager, or Google Ads to launch. Full auto-buying requires API approval in progress.</div>
+          </Card>
+        </div>
+      )}
+
+      {/* ── EMAIL ── */}
+      {tab === "email" && (
+        <div>
+          <LoadingBar loading={loading} color="orange" T={T} />
+          <Card T={T}>
+            <Label T={T}>Email Type</Label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {[["welcome","👋 Welcome"],["abandoned","🛒 Abandoned Cart"],["shipping","📦 Shipping"],["review","⭐ Review Request"],["winback","💝 Win-Back"],["promo","🔥 Promotional"]].map(([id,lbl]) => (
+                <button key={id} onClick={() => setEmailType(id)} style={{ padding: "10px 14px", borderRadius: 8, cursor: "pointer", textAlign: "left", border: `1px solid ${emailType===id ? T.orange : T.border}`, background: emailType===id ? T.orangeBg : T.bg, color: emailType===id ? T.orange : T.text2, fontSize: 13, fontFamily: "inherit", transition: "all 0.15s" }}>{lbl}</button>
+              ))}
+            </div>
+          </Card>
+          <Card T={T}><Label T={T}>Product (optional)</Label><Input value={emailProduct} onChange={setEmailProduct} placeholder="e.g. AI Posture Corrector Smart Wearable" T={T} /></Card>
+          <Btn onClick={handleEmail} disabled={loading} variant="orange" T={T}>{loading ? "Writing..." : "📧 Generate Email"}</Btn>
+          <OutputBox text={out} label="Email Template" color="orange" T={T} />
+        </div>
+      )}
     </div>
   );
 }
@@ -1457,6 +1873,8 @@ export default function AgentEmpire() {
   const [active, setActive] = useState("cmd");
   const [genContent, setGenContent] = useState("");
   const [genTopic, setGenTopic] = useState("");
+  const [shopifyData, setShopifyData] = useState({ title: "", description: "", price: "", comparePrice: "", cost: "", tags: "", seoTitle: "", seoDesc: "", source: "" });
+  const [researchData, setResearchData] = useState("");
   const [backendStatus, setBackendStatus] = useState("checking");
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -1520,6 +1938,8 @@ export default function AgentEmpire() {
     await supabaseSignOut(token);
   };
   const handleGenerated = useCallback((content, topic) => { setGenContent(content); setGenTopic(topic); }, []);
+  const handleShopifyData = useCallback((data) => { setShopifyData(d => ({ ...d, ...data })); }, []);
+  const handleResearchData = useCallback((data) => { setResearchData(data); }, []);
 
   if (!session) return <LoginPage T={T} darkMode={darkMode} setDarkMode={setDarkMode} onLogin={handleLogin} />;
 
@@ -1649,15 +2069,15 @@ export default function AgentEmpire() {
             {active === "cmd"        && <CommandAgent T={T} config={config} log={pushLog} allAgents={AGENTS_META} isMobile={isMobile} />}
             {active === "content"    && <ContentAgent T={T} config={config} log={pushLog} onGenerated={handleGenerated} />}
             {active === "publishing" && <PublishingAgent T={T} config={config} log={pushLog} incoming={genContent} incomingTopic={genTopic} />}
-            {active === "research"   && <ResearchAgent T={T} config={config} log={pushLog} />}
+            {active === "research"   && <ResearchAgent T={T} config={config} log={pushLog} onResearchDone={handleResearchData} />}
             {active === "scheduler"  && <SchedulerAgent T={T} config={config} log={pushLog} />}
             {active === "revenue"    && <RevenueAgent T={T} config={config} log={pushLog} />}
             {active === "etsy"       && <EtsyAgent T={T} config={config} log={pushLog} />}
             {active === "fiverr"     && <FiverrAgent T={T} config={config} log={pushLog} />}
             {active === "shopify"    && <ShopifyProductAgent T={T} config={config} log={pushLog} />}
             {active === "dropship"   && <DropshipAgent T={T} config={config} log={pushLog} />}
-            {active === "storecopy"  && <StoreCopyAgent T={T} config={config} log={pushLog} />}
-            {active === "shopify_mgr" && <ShopifyManagerAgent T={T} config={config} log={pushLog} />}
+            {active === "storecopy"  && <StoreCopyAgent T={T} config={config} log={pushLog} onShopifyReady={handleShopifyData} />}
+            {active === "shopify_mgr" && <ShopifyManagerAgent T={T} config={config} log={pushLog} incomingData={shopifyData} />}
             {active === "logs"       && <LogsPage T={T} allAgents={AGENTS_META} />}
           </div>
 
