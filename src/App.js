@@ -428,7 +428,7 @@ function LoginPage({ T, darkMode, setDarkMode, onLogin }) {
 
 // ─── AGENT PANELS ────────────────────────────────────────────────────────────
 
-function ContentAgent({ T, config, log, onGenerated }) {
+function ContentAgent({ T, config, log, onGenerated, incomingTopic }) {
   const [platform, setPlatform] = useState("tiktok");
   const [type, setType] = useState("hook");
   const [topic, setTopic] = useState(TOPICS[0]);
@@ -436,6 +436,14 @@ function ContentAgent({ T, config, log, onGenerated }) {
   const [tone, setTone] = useState("hype");
   const [loading, setLoading] = useState(false);
   const [out, setOut] = useState("");
+
+  // Auto-fill topic from Research Agent
+  useEffect(() => {
+    if (incomingTopic) {
+      const firstLine = incomingTopic.split("\n").find(l => l.trim().length > 10);
+      if (firstLine) setCustom(firstLine.replace(/^[\d\.\-\*#]+/, "").trim().slice(0, 100));
+    }
+  }, [incomingTopic]);
 
   const generate = async () => {
     setLoading(true); setOut("");
@@ -466,13 +474,19 @@ function ContentAgent({ T, config, log, onGenerated }) {
         <Input value={custom} onChange={setCustom} placeholder="Or type your own topic..." T={T} />
       </Card>
       <Card T={T}><Label T={T}>Tone</Label><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{TONES.map(t => <Chip key={t.id} label={t.label} active={tone === t.id} onClick={() => setTone(t.id)} color="purple" T={T} />)}</div></Card>
+      {incomingTopic && (
+        <div style={{ marginBottom: 12, padding: "10px 14px", borderRadius: 10, background: T.purpleBg, border: `1px solid ${T.purple}33`, fontSize: 12, color: T.purple }}>
+          <span style={{ fontWeight: 600 }}>✓ Topic auto-filled from Research Agent</span>
+          <span style={{ color: T.text2 }}> — edit above if needed</span>
+        </div>
+      )}
       <Btn onClick={generate} disabled={loading} variant="purple" T={T}>{loading ? "Generating..." : "⚡ Generate Content"}</Btn>
       <OutputBox text={out} label="Content Output" color="purple" T={T} />
     </div>
   );
 }
 
-function PublishingAgent({ T, config, log, incoming, incomingTopic }) {
+function PublishingAgent({ T, config, log, incoming, incomingTopic, onPublished }) {
   const [manual, setManual] = useState("");
   const [style, setStyle] = useState("beginner");
   const [platform, setPlatform] = useState("tiktok");
@@ -489,6 +503,7 @@ function PublishingAgent({ T, config, log, incoming, incomingTopic }) {
     const fmtMap = { hook: "3 viral hooks (numbered)", script: "full video script [HOOK],[BODY],[CTA]", caption: "caption with hook, value, CTA and 10 hashtags", series: "3-part series (POST 1, 2, 3)" };
     const result = await callClaude(`Repurpose this content for a second channel.\nORIGINAL:\n${content}\nStyle: ${styleMap[style]}\nFormat: ${fmtMap[format]} for ${platform}\nOutput ONLY the content.`).catch(() => "Error.");
     setOut(result);
+    if (onPublished) onPublished(result);
     log("publishing", `Channel 2 content ready`);
     setLoading(false);
   };
@@ -514,7 +529,7 @@ function PublishingAgent({ T, config, log, incoming, incomingTopic }) {
   );
 }
 
-function ResearchAgent({ T, config, log }) {
+function ResearchAgent({ T, config, log, onResearchDone }) {
   const [cat, setCat] = useState("trending");
   const [niche, setNiche] = useState(config.niche || "AI & Make Money Online");
   const [loading, setLoading] = useState(false);
@@ -532,6 +547,7 @@ function ResearchAgent({ T, config, log }) {
     const result = await callClaude(prompts[cat]).catch(() => "Error.");
     setOut(result);
     await saveToBackend("/api/research/save", { report: result, category: cat });
+    if (onResearchDone) onResearchDone(result);
     log("research", `Research complete — saved to database`);
     setLoading(false);
   };
@@ -562,7 +578,7 @@ function ResearchAgent({ T, config, log }) {
   );
 }
 
-function SchedulerAgent({ T, config, log }) {
+function SchedulerAgent({ T, config, log, onScheduleDone, incomingContent }) {
   const [niche, setNiche] = useState(config.niche || "AI & Make Money Online");
   const [ch1, setCh1] = useState(["tiktok", "youtube"]);
   const [ch2, setCh2] = useState(["instagram", "twitter"]);
@@ -593,6 +609,11 @@ function SchedulerAgent({ T, config, log }) {
   return (
     <div>
       <LoadingBar loading={loading} color="green" T={T} />
+      {incomingContent && (
+        <div style={{ marginBottom: 12, padding: "10px 14px", borderRadius: 10, background: T.greenBg, border: `1px solid ${T.green}33`, fontSize: 12, color: T.green }}>
+          <span style={{ fontWeight: 600 }}>✓ Content received</span><span style={{ color: T.text2 }}> from Content/Publishing Agent — schedule will be built around this content</span>
+        </div>
+      )}
       <Card T={T}><Label T={T}>Niche</Label><Input value={niche} onChange={setNiche} T={T} /></Card>
       <Card T={T}>
         <Label T={T}>Channel 1 Platforms</Label>
@@ -631,7 +652,7 @@ function SchedulerAgent({ T, config, log }) {
   );
 }
 
-function RevenueAgent({ T, config, log }) {
+function RevenueAgent({ T, config, log, onRevenueDone }) {
   const [rev, setRev] = useState({ paypal: "", tiktok: "", meta: "", google: "", youtube: "", affiliate: "", ugc: "" });
   const [spend, setSpend] = useState({ tiktok: "", meta: "", google: "", youtube: "" });
   const [goal, setGoal] = useState("scale");
@@ -650,6 +671,7 @@ function RevenueAgent({ T, config, log }) {
     const result = await callClaude(`Revenue analysis for AI content business.\nREVENUE: PayPal $${rev.paypal||0}, TikTok $${rev.tiktok||0}, Meta $${rev.meta||0}, Google $${rev.google||0}, YouTube $${rev.youtube||0}, Affiliate $${rev.affiliate||0}, UGC $${rev.ugc||0}. TOTAL: $${totalRev.toFixed(2)}\nAD SPEND: TikTok $${spend.tiktok||0}, Meta $${spend.meta||0}, Google $${spend.google||0}, YouTube $${spend.youtube||0}. TOTAL: $${totalSpend.toFixed(2)}\nNET: $${net.toFixed(2)} | ROAS: ${roas}x | GOAL: ${goalMap[goal]}\nGive: 1)PROFIT ANALYSIS 2)AD STRATEGY 3)REVENUE GAPS 4)30-DAY PLAN 5)PAYPAL TIP`).catch(() => "Error.");
     setOut(result);
     await saveToBackend("/api/revenue/save", { revenue: rev, adSpend: spend });
+    if (onRevenueDone) onRevenueDone({ totalRevenue, totalSpend, net, roas, analysis: result });
     log("revenue", `Analysis complete — net: $${net.toFixed(0)}`);
     setLoading(false);
   };
@@ -698,7 +720,7 @@ function RevenueAgent({ T, config, log }) {
   );
 }
 
-function EtsyAgent({ T, config, log }) {
+function EtsyAgent({ T, config, log, onEtsyDone, incomingResearch }) {
   const ETSY_PRODUCTS = [
     { id: "prompts", label: "AI Prompt Pack" }, { id: "templates", label: "Content Templates" },
     { id: "calendar", label: "Content Calendar" }, { id: "guide", label: "Monetization Guide" },
@@ -717,6 +739,7 @@ function EtsyAgent({ T, config, log }) {
     const productMap = { prompts: "AI prompt pack (50-100 prompts)", templates: "social media content templates", calendar: "30-day content calendar", guide: "step-by-step monetization guide PDF", scripts: "viral video script pack (20 scripts)", bundle: "complete digital bundle" };
     const result = await callClaude(`Create a complete Etsy listing for a ${productMap[productType]} in "${niche}" priced at ${priceMap[priceRange]}.\n\nFormat:\nTITLE: [SEO title, max 140 chars]\nPRICE: [specific price + reasoning]\nDESCRIPTION:\n[5 paragraphs: hook, what's included, who it's for, results, CTA]\nTAGS: [13 comma-separated tags]\nWHAT TO INCLUDE IN FILE:\n[bullet list of content to create]\nUPSELL IDEAS:\n[3 related products to create next]`).catch(() => "Error.");
     setOut(result);
+    if (onEtsyDone) onEtsyDone(result);
     log("etsy", `Etsy listing generated`);
     setLoading(false);
   };
@@ -733,7 +756,7 @@ function EtsyAgent({ T, config, log }) {
   );
 }
 
-function FiverrAgent({ T, config, log }) {
+function FiverrAgent({ T, config, log, onFiverrDone }) {
   const GIG_TYPES = [
     { id: "content", label: "Content Creation" }, { id: "scripts", label: "Video Scripts" },
     { id: "strategy", label: "Content Strategy" }, { id: "ugc", label: "UGC Content" },
@@ -758,6 +781,7 @@ function FiverrAgent({ T, config, log }) {
     };
     const result = await callClaude(prompts[outputType]).catch(() => "Error.");
     setOut(result);
+    if (onFiverrDone) onFiverrDone(result);
     log("fiverr", `Fiverr ${outputType} ready`);
     setLoading(false);
   };
@@ -774,7 +798,7 @@ function FiverrAgent({ T, config, log }) {
   );
 }
 
-function CommandAgent({ T, config, log, allAgents }) {
+function CommandAgent({ T, config, log, allAgents, researchData, scheduleData, revenueData, onNavigate }) {
   const AGENT_TASKS = {
     content: ["Generate viral hook", "Write full script", "Create caption pack"], publishing: ["Repurpose for channel 2", "Translate to Spanish"],
     research: ["Find trending topics", "Analyze competitors"], scheduler: ["Build 7-day calendar", "Plan weekly themes"],
@@ -817,7 +841,7 @@ function CommandAgent({ T, config, log, allAgents }) {
   const handleCommand = useCallback(async (input) => {
     const cmd = input.trim().toLowerCase();
     pushTerm(`> ${input}`, "input");
-    if (cmd === "help") { pushTerm(`Commands:\n  status      — show all agents\n  run all     — queue all agents\n  run [agent] — trigger specific agent\n  brief       — generate daily briefing\n  queue       — show task queue\n  report      — performance report\n  auto on/off — toggle autonomous mode\n  clear       — clear terminal`); return; }
+    if (cmd === "help") { pushTerm(`Commands:\n  status         — show all agents\n  run all        — queue all agents\n  run [agent]    — trigger specific agent\n  goto [agent]   — navigate to agent\n  pipeline       — show data pipeline status\n  brief          — generate daily briefing\n  queue          — show task queue\n  report         — performance report\n  auto on/off    — toggle autonomous mode\n  clear          — clear terminal`); return; }
     if (cmd === "status") { allAgents.filter(a => a.id !== "cmd").forEach(a => pushTerm(`  AG-${a.num} ${a.label.padEnd(12)} ✓ Online — Ready`)); return; }
     if (cmd === "clear") { setTermLog([]); return; }
     if (cmd === "queue") { taskQueue.length === 0 ? pushTerm("Task queue is empty.") : taskQueue.forEach(t => pushTerm(`  [${t.status}] AG-${allAgents.find(a=>a.id===t.agentId)?.num} → ${t.task}`)); return; }
@@ -825,6 +849,13 @@ function CommandAgent({ T, config, log, allAgents }) {
     if (cmd === "auto off") { setAutoMode(false); pushTerm("Autonomous mode deactivated."); return; }
     if (cmd === "run all") { pushTerm("Queuing all agents..."); allAgents.filter(a => a.id !== "cmd").forEach(a => { const task = AGENT_TASKS[a.id]?.[0]; if (task) { addTask(a.id, task); pushTerm(`  AG-${a.num} ${a.label} → ${task}`); } }); return; }
     if (cmd.startsWith("run ")) { const name = cmd.replace("run ", ""); const agent = allAgents.find(a => a.id === name || a.label.toLowerCase() === name); if (!agent) { pushTerm(`Agent "${name}" not found.`, "error"); return; } const task = AGENT_TASKS[agent.id]?.[0] || "Execute directive"; addTask(agent.id, task); pushTerm(`AG-${agent.num} ${agent.label} tasked: ${task}`); log("cmd", `Commanded AG-${agent.num}`); return; }
+    if (cmd.startsWith("goto ") || cmd.startsWith("open ")) { const name = cmd.replace("goto ","").replace("open ","").trim(); const agent = allAgents.find(a => a.id === name || a.label.toLowerCase() === name); if (agent && onNavigate) { onNavigate(agent.id); pushTerm(`Navigating to ${agent.label} Agent...`); } else pushTerm(`Agent "${name}" not found.`, "error"); return; }
+    if (cmd === "pipeline") { pushTerm(`EMPIRE PIPELINE STATUS:
+  Research → Content: ${researchData ? "✓ DATA READY" : "○ Empty"}
+  Content → Publishing: ${researchData ? "✓ DATA READY" : "○ Empty"}
+  Publishing → Scheduler: ${scheduleData ? "✓ SCHEDULE READY" : "○ Empty"}
+  Product Research → Dropship → Store Copy → Shopify: Ready
+  Revenue Tracking: ${revenueData ? "✓ DATA READY" : "○ Empty"}`); return; }
     if (cmd === "report") { pushTerm(`Empire Report\n  Agents online: ${allAgents.length - 1}\n  Tasks completed: ${completedTasks.length}\n  Queue: ${taskQueue.length}\n  Auto mode: ${autoMode ? "Active" : "Inactive"}`); return; }
     if (cmd === "brief") { setBriefingLoading(true); pushTerm("Generating briefing..."); const result = await callClaude(`You are the Command Agent — AI GM of a content empire in "${config.niche||"AI & MMO"}". ${completedTasks.length} tasks completed, ${taskQueue.length} in queue.\n\nGenerate a sharp daily briefing:\n1. OPERATIONS SUMMARY\n2. CONTENT PIPELINE — 3 specific pieces to create today\n3. REVENUE FOCUS — top 2 monetization actions\n4. AGENT DIRECTIVES — specific orders for each agent\n5. THREAT ANALYSIS — 2 risks/opportunities\n6. COMMANDER'S ORDER — single most important action right now\n\nBe direct, tactical, specific.`).catch(() => "Error."); setBriefing(result); setBriefingLoading(false); pushTerm("Briefing generated. View in Briefing tab."); setTab("briefing"); return; }
     pushTerm("Processing...");
@@ -978,7 +1009,7 @@ function CommandAgent({ T, config, log, allAgents }) {
 // ─── MAIN APP ────────────────────────────────────────────────────────────────
 
 // ─── AGENT 08: PRODUCT RESEARCH ──────────────────────────────────────────────
-function ShopifyProductAgent({ T, config, log }) {
+function ShopifyProductAgent({ T, config, log, onProductFound }) {
   const CATEGORIES = [
     { id: "trending", label: "Trending Now" }, { id: "evergreen", label: "Evergreen Winners" },
     { id: "seasonal", label: "Seasonal Picks" }, { id: "ai", label: "AI & Tech Products" },
@@ -1021,6 +1052,7 @@ PRODUCT SCORE: [X/10]
 
 Sort by Product Score highest to lowest. Be specific with real product examples.`).catch(() => "Error.");
     setOut(result);
+    if (onProductFound) onProductFound(result);
     log("shopify", `Product research complete — 8 products analyzed`);
     setLoading(false);
   };
@@ -1044,7 +1076,7 @@ Sort by Product Score highest to lowest. Be specific with real product examples.
 }
 
 // ─── AGENT 09: DROPSHIP OPERATIONS ───────────────────────────────────────────
-function DropshipAgent({ T, config, log }) {
+function DropshipAgent({ T, config, log, incomingProduct, onDropshipDone }) {
   const OUTPUT_TYPES = [
     { id: "supplier", label: "Find Supplier" }, { id: "margins", label: "Calculate Margins" },
     { id: "outreach", label: "Supplier Outreach" }, { id: "fulfillment", label: "Fulfillment Plan" },
@@ -1070,13 +1102,28 @@ function DropshipAgent({ T, config, log }) {
 
     const result = await callClaude(prompts[outputType]).catch(() => "Error.");
     setOut(result);
+    if (onDropshipDone) onDropshipDone(result);
     log("dropship", `${outputType} complete for "${productName}"`);
     setLoading(false);
   };
 
+  // Auto-fill product name from Product Research
+  useEffect(() => {
+    if (incomingProduct) {
+      const firstProduct = incomingProduct.split("\n").find(l => l.includes("PRODUCT:"));
+      if (firstProduct) setProductName(firstProduct.replace("PRODUCT:", "").replace(/[*#]/g,"").trim().slice(0,80));
+    }
+  }, [incomingProduct]);
+
   return (
     <div>
       <LoadingBar loading={loading} color="blue" T={T} />
+      {incomingProduct && (
+        <div style={{ marginBottom: 12, padding: "10px 14px", borderRadius: 10, background: T.blueBg, border: `1px solid ${T.blue}33`, fontSize: 12, color: T.blue }}>
+          <span style={{ fontWeight: 600 }}>✓ Product data received from Product Research Agent</span>
+          <span style={{ color: T.text2, marginLeft: 6 }}>— product name auto-filled below</span>
+        </div>
+      )}
       <Card T={T}><Label T={T}>Operation Type</Label><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{OUTPUT_TYPES.map(o => <Chip key={o.id} label={o.label} active={outputType === o.id} onClick={() => setOutputType(o.id)} color="blue" T={T} />)}</div></Card>
       <Card T={T}>
         <Label T={T}>Product Name</Label>
@@ -1095,7 +1142,7 @@ function DropshipAgent({ T, config, log }) {
 }
 
 // ─── AGENT 10: STORE COPY ────────────────────────────────────────────────────
-function StoreCopyAgent({ T, config, log, onShopifyReady }) {
+function StoreCopyAgent({ T, config, log, onShopifyReady, incomingProduct, incomingDropship }) {
   const COPY_TYPES = [
     { id: "product", label: "Product Listing" }, { id: "ads", label: "Ad Copy" },
     { id: "email", label: "Email Sequence" }, { id: "homepage", label: "Homepage Copy" },
@@ -1163,9 +1210,25 @@ function StoreCopyAgent({ T, config, log, onShopifyReady }) {
     setLoading(false);
   };
 
+  // Auto-fill from product research or dropship data
+  useEffect(() => {
+    if (incomingProduct) {
+      const firstProduct = incomingProduct.split("\n").find(l => l.includes("PRODUCT:"));
+      if (firstProduct) setProductName(firstProduct.replace("PRODUCT:", "").replace(/[*#]/g,"").trim().slice(0,80));
+      const priceMatch = incomingProduct.match(/SELL PRICE:\s*\\$([\d.]+)/);
+      if (priceMatch) setPrice(priceMatch[1]);
+    }
+  }, [incomingProduct]);
+
   return (
     <div>
       <LoadingBar loading={loading} color="purple" T={T} />
+      {(incomingProduct || incomingDropship) && (
+        <div style={{ marginBottom: 12, padding: "10px 14px", borderRadius: 10, background: T.purpleBg, border: `1px solid ${T.purple}33`, fontSize: 12, color: T.purple, display: "flex", flexDirection: "column", gap: 4 }}>
+          {incomingProduct && <div><span style={{ fontWeight: 600 }}>✓ Product Research</span><span style={{ color: T.text2 }}> — product & price auto-filled</span></div>}
+          {incomingDropship && <div><span style={{ fontWeight: 600 }}>✓ Dropship Data</span><span style={{ color: T.text2 }}> — supplier info available for description</span></div>}
+        </div>
+      )}
       <Card T={T}><Label T={T}>Copy Type</Label><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{COPY_TYPES.map(c => <Chip key={c.id} label={c.label} active={copyType === c.id} onClick={() => setCopyType(c.id)} color="purple" T={T} />)}</div></Card>
       <Card T={T}>
         <Label T={T}>Product Details</Label>
@@ -1875,6 +1938,13 @@ export default function AgentEmpire() {
   const [genTopic, setGenTopic] = useState("");
   const [shopifyData, setShopifyData] = useState({ title: "", description: "", price: "", comparePrice: "", cost: "", tags: "", seoTitle: "", seoDesc: "", source: "" });
   const [researchData, setResearchData] = useState("");
+  const [scheduleData, setScheduleData] = useState(null);
+  const [productResearchData, setProductResearchData] = useState("");
+  const [dropshipData, setDropshipData] = useState("");
+  const [revenueData, setRevenueData] = useState(null);
+  const [publishedContent, setPublishedContent] = useState("");
+  const [etsyData, setEtsyData] = useState("");
+  const [fiverrData, setFiverrData] = useState("");
   const [backendStatus, setBackendStatus] = useState("checking");
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -1940,6 +2010,13 @@ export default function AgentEmpire() {
   const handleGenerated = useCallback((content, topic) => { setGenContent(content); setGenTopic(topic); }, []);
   const handleShopifyData = useCallback((data) => { setShopifyData(d => ({ ...d, ...data })); }, []);
   const handleResearchData = useCallback((data) => { setResearchData(data); }, []);
+  const handleScheduleData = useCallback((data) => { setScheduleData(data); }, []);
+  const handleProductResearch = useCallback((data) => { setProductResearchData(data); }, []);
+  const handleDropshipData = useCallback((data) => { setDropshipData(data); }, []);
+  const handleRevenueData = useCallback((data) => { setRevenueData(data); }, []);
+  const handlePublishedContent = useCallback((content) => { setPublishedContent(content); }, []);
+  const handleEtsyData = useCallback((data) => { setEtsyData(data); }, []);
+  const handleFiverrData = useCallback((data) => { setFiverrData(data); }, []);
 
   if (!session) return <LoginPage T={T} darkMode={darkMode} setDarkMode={setDarkMode} onLogin={handleLogin} />;
 
@@ -2040,6 +2117,24 @@ export default function AgentEmpire() {
               );
             })}
             <div style={{ height: 1, background: T.border, margin: "16px 8px" }} />
+            <div style={{ fontSize: 11, fontWeight: 600, color: T.text2, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8, padding: "0 8px" }}>Pipeline Status</div>
+            <div style={{ padding: "4px 8px", marginBottom: 8 }}>
+              {[
+                { label: "Research", hasData: !!researchData, color: "yellow" },
+                { label: "Content", hasData: !!genContent, color: "purple" },
+                { label: "Schedule", hasData: !!scheduleData, color: "green" },
+                { label: "Products", hasData: !!productResearchData, color: "green" },
+                { label: "Store Copy", hasData: !!shopifyData.title, color: "orange" },
+                { label: "Revenue", hasData: !!revenueData, color: "red" },
+              ].map(p => (
+                <div key={p.label} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 4px", marginBottom: 2 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: p.hasData ? T[p.color] : T.border, flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, color: p.hasData ? T[p.color] : T.text3 }}>{p.label}</span>
+                  <span style={{ fontSize: 10, color: p.hasData ? T[p.color] : T.text3, marginLeft: "auto" }}>{p.hasData ? "Ready" : "Empty"}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ height: 1, background: T.border, margin: "8px 8px 16px" }} />
             <div style={{ fontSize: 11, fontWeight: 600, color: T.text2, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8, padding: "0 8px" }}>Settings</div>
             <div style={{ padding: "4px 8px" }}>
               <div style={{ fontSize: 12, color: T.text2, marginBottom: 6 }}>Niche</div>
@@ -2066,17 +2161,17 @@ export default function AgentEmpire() {
               <Badge color={activeMeta?.color} T={T}>{activeMeta?.num}</Badge>
             </div>
 
-            {active === "cmd"        && <CommandAgent T={T} config={config} log={pushLog} allAgents={AGENTS_META} isMobile={isMobile} />}
-            {active === "content"    && <ContentAgent T={T} config={config} log={pushLog} onGenerated={handleGenerated} />}
-            {active === "publishing" && <PublishingAgent T={T} config={config} log={pushLog} incoming={genContent} incomingTopic={genTopic} />}
+            {active === "cmd"        && <CommandAgent T={T} config={config} log={pushLog} allAgents={AGENTS_META} isMobile={isMobile} researchData={researchData} scheduleData={scheduleData} revenueData={revenueData} onNavigate={setActive} />}
+            {active === "content"    && <ContentAgent T={T} config={config} log={pushLog} onGenerated={handleGenerated} incomingTopic={researchData} />}
+            {active === "publishing" && <PublishingAgent T={T} config={config} log={pushLog} incoming={genContent} incomingTopic={genTopic} onPublished={handlePublishedContent} />}
             {active === "research"   && <ResearchAgent T={T} config={config} log={pushLog} onResearchDone={handleResearchData} />}
-            {active === "scheduler"  && <SchedulerAgent T={T} config={config} log={pushLog} />}
-            {active === "revenue"    && <RevenueAgent T={T} config={config} log={pushLog} />}
-            {active === "etsy"       && <EtsyAgent T={T} config={config} log={pushLog} />}
-            {active === "fiverr"     && <FiverrAgent T={T} config={config} log={pushLog} />}
-            {active === "shopify"    && <ShopifyProductAgent T={T} config={config} log={pushLog} />}
-            {active === "dropship"   && <DropshipAgent T={T} config={config} log={pushLog} />}
-            {active === "storecopy"  && <StoreCopyAgent T={T} config={config} log={pushLog} onShopifyReady={handleShopifyData} />}
+            {active === "scheduler"  && <SchedulerAgent T={T} config={config} log={pushLog} onScheduleDone={handleScheduleData} incomingContent={publishedContent || genContent} />}
+            {active === "revenue"    && <RevenueAgent T={T} config={config} log={pushLog} onRevenueDone={handleRevenueData} />}
+            {active === "etsy"       && <EtsyAgent T={T} config={config} log={pushLog} onEtsyDone={handleEtsyData} incomingResearch={researchData} />}
+            {active === "fiverr"     && <FiverrAgent T={T} config={config} log={pushLog} onFiverrDone={handleFiverrData} />}
+            {active === "shopify"    && <ShopifyProductAgent T={T} config={config} log={pushLog} onProductFound={handleProductResearch} />}
+            {active === "dropship"   && <DropshipAgent T={T} config={config} log={pushLog} incomingProduct={productResearchData} onDropshipDone={handleDropshipData} />}
+            {active === "storecopy"  && <StoreCopyAgent T={T} config={config} log={pushLog} onShopifyReady={handleShopifyData} incomingProduct={productResearchData} incomingDropship={dropshipData} />}
             {active === "shopify_mgr" && <ShopifyManagerAgent T={T} config={config} log={pushLog} incomingData={shopifyData} />}
             {active === "logs"       && <LogsPage T={T} allAgents={AGENTS_META} />}
           </div>
