@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 const BACKEND = "https://agent-empire-backend-production.up.railway.app";
 const SUPABASE_URL = "https://ewahhppqyoqaewoxwspj.supabase.co";
 const SUPABASE_KEY = "sb_publishable_dskneAba0v6z-PXVao4iNQ_M_WLz5VJ";
-const ALLOWED_EMAIL = ""; // Set your email here after first login
+const ALLOWED_EMAIL = "guillaumettechris@gmail.com"; // Set your email here after first login
 
 // ─── DESIGN TOKENS ───────────────────────────────────────────────────────────
 const light = {
